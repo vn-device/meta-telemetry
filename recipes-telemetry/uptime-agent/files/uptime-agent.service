@@ -1,0 +1,13 @@
+[Unit]
+Description=Custom AgentX Telemetry Subagent
+After=snmpd.service
+Requires=snmpd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/uptime-agent
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
