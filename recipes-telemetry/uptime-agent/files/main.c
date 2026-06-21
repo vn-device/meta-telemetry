@@ -11,11 +11,13 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "appUptimeSeconds.h"
+#include "gpioTable.h" // Injected RP1 hardware telemetry matrix
 
 static int keep_running = 1;
 
 // Graceful shutdown handler to release the Unix domain socket
-void stop_server(int signum) {
+void stop_server(int signum)
+{
     keep_running = 0;
 }
 
@@ -37,7 +39,7 @@ int handle_osUptimeSeconds(netsnmp_mib_handler *handler,
             if (sysinfo(&info) == 0) {
                 os_uptime = info.uptime; 
             } 
-	    else {
+            else {
                 snmp_log(LOG_ERR, "AgentX subagent failed to read kernel sysinfo.\n");
                 netsnmp_set_request_error(reqinfo, requests, SNMP_ERR_GENERR);
                 return SNMP_ERR_NOERROR;
@@ -57,9 +59,11 @@ void init_osUptimeSeconds(void)
     // Define the base OID: .1.3.6.1.4.1.99999.2
     const oid osUptime_oid[] = {1, 3, 6, 1, 4, 1, 99999, 2};
     netsnmp_register_scalar(
-        netsnmp_create_handler_registration("osUptimeSeconds", handle_osUptimeSeconds,
-                                            osUptime_oid, OID_LENGTH(osUptime_oid),
-                                            HANDLER_CAN_RONLY)
+        netsnmp_create_handler_registration(
+            "osUptimeSeconds", handle_osUptimeSeconds,
+            osUptime_oid, OID_LENGTH(osUptime_oid),
+            HANDLER_CAN_RONLY
+        )
     );
 }
 
@@ -84,6 +88,9 @@ int main(int argc, char **argv)
     
     // Initialize the OS kernel uptime scalar
     init_osUptimeSeconds();
+
+    // Initialize the hardware telemetry GPIO table
+    init_gpioTable();
 
     // Read the snmpd.conf files and complete the AgentX socket handshake
     init_snmp("telemetry_agent");

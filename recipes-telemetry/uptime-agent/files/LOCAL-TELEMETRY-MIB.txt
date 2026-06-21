@@ -1,0 +1,64 @@
+LOCAL-TELEMETRY-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, enterprises FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION FROM SNMPv2-TC;
+
+-- Define the root enterprise node (Using 99999 as the established placeholder)
+localTelemetry MODULE-IDENTITY
+    LAST-UPDATED "202606210000Z"
+    ORGANIZATION "vn-device"
+    CONTACT-INFO "Maintainer: @vn-device
+                  Repository: github.com/vn-device/meta-telemetry"
+    DESCRIPTION  "Hardware Telemetry MIB for Raspberry Pi 5 RP1 GPIO.
+                  Independently developed and maintained."
+    ::= { enterprises 99999 }
+
+-- The Table Node (.3)
+gpioTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF GpioEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "A table containing 28 rows of RP1 GPIO hardware telemetry."
+    ::= { localTelemetry 3 }
+
+-- The Row Node (.1)
+gpioEntry OBJECT-TYPE
+    SYNTAX      GpioEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "A conceptual row representing a single addressable GPIO pin."
+    INDEX       { gpioIndex }
+    ::= { gpioTable 1 }
+
+GpioEntry ::= SEQUENCE {
+    gpioIndex       Integer32,
+    gpioBcmNumber   Integer32,
+    gpioLockStatus  Integer32
+}
+
+-- Column 1: Primary Key (.1)
+gpioIndex OBJECT-TYPE
+    SYNTAX      Integer32 (1..28)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "The table row index (1-28)."
+    ::= { gpioEntry 1 }
+
+-- Column 2: RP1 BCM Pin Number (.2)
+gpioBcmNumber OBJECT-TYPE
+    SYNTAX      Integer32 (0..27)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "The physical BCM hardware number routed through the RP1."
+    ::= { gpioEntry 2 }
+
+-- Column 3: Kernel Lock Status (.3)
+gpioLockStatus OBJECT-TYPE
+    SYNTAX      Integer32 { available(0), locked(1) }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Process ownership state queried via libgpiod."
+    ::= { gpioEntry 3 }
+
+END
