@@ -7,16 +7,19 @@
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <time.h>
+#include <stdint.h>
 #include "appUptimeSeconds.h"
 
-// Statically allocate the initialization timestamp in memory
-static time_t agent_start_time = 0;
+// Statically allocate the initialization timestamp in memory using the POSIX timespec struct
+static struct timespec agent_start_time = {0, 0};
 
 /** Initializes the appUptimeSeconds module */
 void init_appUptimeSeconds(void)
 {
-    // Record the exact Unix epoch time when the AgentX subagent boots
-    agent_start_time = time(NULL);
+    // Query the hardware monotonic clock. This isolates the subagent from NTP time jumps.
+    if (clock_gettime(CLOCK_MONOTONIC, &agent_start_time) != 0) {
+        snmp_log(LOG_ERR, "Failed to initialize CLOCK_MONOTONIC\n");
+    }
 
     const oid appUptimeSeconds_oid[] = { 1,3,6,1,4,1,99999,1 };
 
@@ -36,12 +39,17 @@ int handle_appUptimeSeconds(netsnmp_mib_handler *handler,
 {
     switch(reqinfo->mode) {
         case MODE_GET: {
-            // Calculate the delta between current time and initialization time
-            time_t current_time = time(NULL);
-            long uptime_seconds = (long)difftime(current_time, agent_start_time);
+            struct timespec current_time;
+            
+            if (clock_gettime(CLOCK_MONOTONIC, &current_time) != 0) {
+                return SNMP_ERR_GENERR;
+            }
 
-            // Net-SNMP requires the data pointer to be cast to (u_char *) regardless of the actual ASN type.
-            // ASN_INTEGER tells the daemon how to interpret the bytes at that memory address.
+            // ARM64 (aarch64) uses the LP64 data model where 'long' is 64 bits.
+            // ASN_INTEGER strictly requires a 32-bit signed integer.
+            // We cast the delta to int32_t to prevent memory misalignment during Net-SNMP byte encoding.
+            int32_t uptime_seconds = (int32_t)(current_time.tv_sec - agent_start_time.tv_sec);
+
             snmp_set_var_typed_value(requests->requestvb, ASN_INTEGER,
                                      (u_char *)&uptime_seconds,
                                      sizeof(uptime_seconds));
