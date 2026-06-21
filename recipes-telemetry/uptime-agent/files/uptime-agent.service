@@ -1,11 +1,13 @@
 [Unit]
-Description=Custom AgentX Telemetry Subagent
+Description=Telemetry AgentX Subagent
 After=snmpd.service
 Requires=snmpd.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/uptime-agent
+# -f forces foreground execution so systemd can track the PID
+# -L routes standard error to the system journal
+ExecStart=/usr/bin/uptime-agent -f -L
 Restart=on-failure
 RestartSec=5
 
