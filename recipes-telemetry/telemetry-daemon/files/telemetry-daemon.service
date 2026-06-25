@@ -1,0 +1,14 @@
+[Unit]
+Description=C++ WebSocket Telemetry Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/telemetry_daemon
+Restart=always
+RestartSec=3
+# Ensures the daemon has access to the libgpiod character devices and sysinfo
+User=root
+
+[Install]
+WantedBy=multi-user.target
