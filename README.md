@@ -1,30 +1,30 @@
-# meta-telemetry: Yocto Layer for Raspberry Pi 5 SNMPv3 Telemetry
+# meta-telemetry: Yocto Layer for Raspberry Pi 5 WebSocket Telemetry
 
-A custom Yocto Project meta-layer deploying a C-based AgentX IPC subagent to surface operating system and application runtime metrics to a Net-SNMP master daemon via the IPv4 loopback interface.
+A custom Yocto Project meta-layer deploying a Qt6 C++ daemon and a lightweight web presentation layer to surface real-time operating system and application runtime metrics over persistent WebSockets.
 
 ## ⚙️ Systems Architecture & Data Plane
 
-This Board Support Package (BSP) extension establishes a strictly decoupled telemetry pipeline optimized for embedded Linux environments:
+This layer establishes a strictly decoupled, event-driven telemetry pipeline optimized for low-latency embedded monitoring:
 
-`Net-SNMP Master Daemon <--> Unix Domain Socket (/var/agentx/master) <--> C Subagent <--> Kernel Loopback (127.0.0.1)`
+`Browser Client (dashboard.html) <--> WebSockets (Port 8080) <--> Qt6 C++ Daemon <--> Physical Layer (GPIO 14)`
 
-* **Data Plane Isolation:** Polling operates entirely at the OS kernel level via `127.0.0.1`, guaranteeing zero physical network latency and air-gapped IPC reliability even if the physical NIC (`192.168.1.x`) drops its DHCP lease.
-* **AgentX IPC Bridge:** Bypasses legacy MIB compilation by utilizing the AgentX protocol. The master daemon delegates the `.1.3.6.1.4.1.99999` enterprise tree to the custom C binary, which autonomously registers and broadcasts `ASN_INTEGER` payloads.
+* **Event-Driven IPC:** Replaces heavy polling loops with an asynchronous WebSocket server running on port 8080. Telemetry payloads are encoded into JSON frames and pushed natively to connected clients.
+* **Decoupled Presentation Layer:** A Lighttpd web server operates on port 80 to deliver a static, modern, responsive CSS Grid dashboard. The client application utilizes dynamic host resolution (`window.location.hostname`) to bind to the socket bridge automatically under changing DHCP conditions.
+* **Hardware Interactivity:** Implements bidirectional communication, allowing clients to send control frames down the socket to safely trigger physical hardware state changes on GPIO 14.
 
 ## 🛠️ Tech Stack
 
-* **Build System:** Yocto Project, BitBake
+* **Build System:** Yocto Project, BitBake (Scaffolded via `core-image-minimal`)
 * **Hardware Target:** Raspberry Pi 5 (`aarch64`)
-* **Systems Programming:** C, standard POSIX APIs
-* **Networking & IPC:** Net-SNMP (AgentX Protocol), IPv4 Loopback routing
-* **Process Management:** systemd (Scaffolded)
+* **Core Backend:** C++17, Qt6 Base Core/Network
+* **Web Serving:** Lighttpd (Minimal footprint, CGI modules stripped)
+* **Frontend UI:** HTML5, CSS3 (Modern dark-mode grid), native JavaScript ES6 WebSockets
+* **Process Management:** systemd (Automated lifecycle handling)
 
-## 🚀 Build Instructions
-
-This layer is designed to be appended to a standard `core-image-minimal` target.
+## 🚀 Build and Deployment Instructions
 
 **1. Clone the Layer**
 Navigate to your Yocto `sources/` directory and pull this repository:
 ```bash
-cd sources/
+cd ~/rpi-yocto/sources/
 git clone [https://github.com/](https://github.com/)<YOUR_GITHUB_USERNAME>/meta-telemetry.git
