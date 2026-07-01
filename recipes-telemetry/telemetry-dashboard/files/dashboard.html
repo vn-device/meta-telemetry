@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPi 5 Telemetry Dashboard</title>
+    <title>Pi 5 RP1 Console</title>
     <style>
         :root {
             --bg-base: #121212;
@@ -251,6 +251,58 @@
             box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
         }
 
+        /* Minimalist Color Legend */
+        .legend-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 24px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-ring {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 2px solid;
+            background-color: transparent;
+            box-sizing: border-box;
+        }
+
+        .legend-label {
+            font-family: monospace;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            opacity: 0.6;
+        }
+
+        /* Map CSS variables to legend items */
+        .legend-5v .legend-ring, .legend-5v .legend-label { border-color: var(--pin-5v); color: var(--pin-5v); }
+        .legend-3v3 .legend-ring, .legend-3v3 .legend-label { border-color: var(--pin-3v3); color: var(--pin-3v3); }
+        .legend-gnd .legend-ring, .legend-gnd .legend-label { border-color: var(--pin-gnd); color: var(--pin-gnd); }
+        .legend-gpio .legend-ring, .legend-gpio .legend-label { border-color: var(--pin-gpio); color: var(--pin-gpio); }
+        
+        .legend-reserved .legend-ring { 
+            border-color: var(--accent); 
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(187, 134, 252, 0.4),
+                rgba(187, 134, 252, 0.4) 2px,
+                transparent 2px,
+                transparent 4px
+            ); 
+        }
+        .legend-reserved .legend-label { color: var(--accent); }
+
         .footer {
             text-align: center;
             margin-top: 10px;
@@ -263,7 +315,7 @@
 <body>
     <div class="dashboard-container">
         <div class="header">
-            <h1>Hardware Telemetry</h1>
+            <h1>Pi 5 RP1 Console</h1>
             <div id="conn-status" class="status-badge">Disconnected</div>
         </div>
 
@@ -295,6 +347,30 @@
                 <div class="pinout-wrapper">
                     <div id="pin-grid" class="pin-grid">
                         <!-- JavaScript populates grid here -->
+                    </div>
+                </div>
+                
+                <!-- Minimalist Color Legend -->
+                <div class="legend-container">
+                    <div class="legend-item legend-5v">
+                        <div class="legend-ring"></div>
+                        <span class="legend-label">5V Power</span>
+                    </div>
+                    <div class="legend-item legend-3v3">
+                        <div class="legend-ring"></div>
+                        <span class="legend-label">3.3V Power</span>
+                    </div>
+                    <div class="legend-item legend-gnd">
+                        <div class="legend-ring"></div>
+                        <span class="legend-label">Ground</span>
+                    </div>
+                    <div class="legend-item legend-gpio">
+                        <div class="legend-ring"></div>
+                        <span class="legend-label">Configurable I/O</span>
+                    </div>
+                    <div class="legend-item legend-reserved">
+                        <div class="legend-ring"></div>
+                        <span class="legend-label">System Reserved</span>
                     </div>
                 </div>
             </div>
