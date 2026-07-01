@@ -178,54 +178,76 @@
             padding: 24px;
         }
 
+        .pinout-wrapper {
+            overflow-x: auto;
+            /* Native momentum scrolling on touch devices */
+            -webkit-overflow-scrolling: touch;
+        }
+
         .pin-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            max-width: 600px;
+            grid-template-columns: repeat(20, minmax(28px, 1fr));
+            grid-template-rows: repeat(2, auto);
+            gap: 4px;
+            justify-content: center;
             margin: 0 auto;
+            /* Buffer zone to absorb hover transforms and box-shadows on edge pins */
+            padding: 12px;
         }
 
         .pin {
             display: flex;
             align-items: center;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 14px;
-            background-color: var(--bg-surface-elevated);
-            border: 1px solid var(--border);
-        }
-
-        .pin-left {
-            justify-content: flex-end;
-            text-align: right;
-        }
-
-        .pin-right {
-            justify-content: flex-start;
-            text-align: left;
-        }
-
-        .pin-num {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            line-height: 24px;
-            text-align: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
-            background-color: var(--bg-base);
+            font-family: monospace;
+            font-size: 11px;
             font-weight: bold;
-            margin: 0 8px;
+            background-color: var(--bg-base);
+            border: 2px solid var(--border);
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+            user-select: none;
         }
 
-        .pin.power3v3 .pin-num { border: 2px solid var(--pin-3v3); color: var(--pin-3v3); }
-        .pin.power5v .pin-num { border: 2px solid var(--pin-5v); color: var(--pin-5v); }
-        .pin.gnd .pin-num { border: 2px solid var(--pin-gnd); color: var(--pin-gnd); }
-        .pin.gpio .pin-num { border: 2px solid var(--pin-gpio); color: var(--pin-gpio); }
+        /* Non-Configurable Pins */
+        .pin.power3v3, .pin.power5v, .pin.gnd {
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        .pin.power3v3 { border-color: var(--pin-3v3); color: var(--pin-3v3); }
+        .pin.power5v { border-color: var(--pin-5v); color: var(--pin-5v); }
+        .pin.gnd { border-color: var(--pin-gnd); color: var(--pin-gnd); }
         
+        /* Configurable GPIO */
+        .pin.gpio {
+            border-color: var(--pin-gpio);
+            color: var(--pin-gpio);
+            cursor: pointer;
+        }
+        .pin.gpio:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 8px rgba(129, 199, 132, 0.4);
+        }
+
+        /* System Reserved (ID_EEPROM) */
+        .pin.reserved {
+            border-color: var(--accent);
+            color: var(--accent);
+            cursor: not-allowed;
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(187, 134, 252, 0.1),
+                rgba(187, 134, 252, 0.1) 4px,
+                transparent 4px,
+                transparent 8px
+            );
+        }
+
         .pin.highlight {
             border-color: var(--accent);
+            color: var(--accent);
             box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
         }
 
@@ -270,8 +292,11 @@
         <div id="tab-gpio" class="tab-content">
             <div class="pinout-container">
                 <div class="controls-header" style="text-align: center;">Raspberry Pi 5 J8 Header</div>
-                <div id="pin-grid" class="pin-grid">
+                <div class="pinout-wrapper">
+                    <div id="pin-grid" class="pin-grid">
+                        <!-- JavaScript populates grid here -->
                     </div>
+                </div>
             </div>
         </div>
 
@@ -294,40 +319,50 @@
             { pin: 13, name: 'GPIO 27', type: 'gpio' },       { pin: 14, name: 'Ground', type: 'gnd' },
             { pin: 15, name: 'GPIO 22', type: 'gpio' },       { pin: 16, name: 'GPIO 23', type: 'gpio' },
             { pin: 17, name: '3V3 Power', type: 'power3v3' }, { pin: 18, name: 'GPIO 24', type: 'gpio' },
-            { pin: 19, name: 'GPIO 10 (MOSI)', type: 'gpio' },{ pin: 20, name: 'Ground', type: 'gnd' },
-            { pin: 21, name: 'GPIO 9 (MISO)', type: 'gpio' }, { pin: 22, name: 'GPIO 25', type: 'gpio' },
-            { pin: 23, name: 'GPIO 11 (SCLK)', type: 'gpio' },{ pin: 24, name: 'GPIO 8 (CE0)', type: 'gpio' },
-            { pin: 25, name: 'Ground', type: 'gnd' },         { pin: 26, name: 'GPIO 7 (CE1)', type: 'gpio' },
-            { pin: 27, name: 'GPIO 0 (ID_SD)', type: 'gpio' },{ pin: 28, name: 'GPIO 1 (ID_SC)', type: 'gpio' },
+            { pin: 19, name: 'GPIO 10 (SPI0 MOSI)', type: 'gpio' },{ pin: 20, name: 'Ground', type: 'gnd' },
+            { pin: 21, name: 'GPIO 9 (SPI0 MISO)', type: 'gpio' }, { pin: 22, name: 'GPIO 25', type: 'gpio' },
+            { pin: 23, name: 'GPIO 11 (SPI0 SCLK)', type: 'gpio' },{ pin: 24, name: 'GPIO 8 (SPI0 CE0)', type: 'gpio' },
+            { pin: 25, name: 'Ground', type: 'gnd' },         { pin: 26, name: 'GPIO 7 (SPI0 CE1)', type: 'gpio' },
+            { pin: 27, name: 'GPIO 0 (ID_SD)', type: 'reserved' },{ pin: 28, name: 'GPIO 1 (ID_SC)', type: 'reserved' },
             { pin: 29, name: 'GPIO 5', type: 'gpio' },        { pin: 30, name: 'Ground', type: 'gnd' },
             { pin: 31, name: 'GPIO 6', type: 'gpio' },        { pin: 32, name: 'GPIO 12 (PWM0)', type: 'gpio' },
             { pin: 33, name: 'GPIO 13 (PWM1)', type: 'gpio' },{ pin: 34, name: 'Ground', type: 'gnd' },
-            { pin: 35, name: 'GPIO 19 (MISO)', type: 'gpio' },{ pin: 36, name: 'GPIO 16', type: 'gpio' },
-            { pin: 37, name: 'GPIO 26', type: 'gpio' },       { pin: 38, name: 'GPIO 20 (MOSI)', type: 'gpio' },
-            { pin: 39, name: 'Ground', type: 'gnd' },         { pin: 40, name: 'GPIO 21 (SCLK)', type: 'gpio' }
+            { pin: 35, name: 'GPIO 19 (SPI1 MISO)', type: 'gpio' },{ pin: 36, name: 'GPIO 16', type: 'gpio' },
+            { pin: 37, name: 'GPIO 26', type: 'gpio' },       { pin: 38, name: 'GPIO 20 (SPI1 MOSI)', type: 'gpio' },
+            { pin: 39, name: 'Ground', type: 'gnd' },         { pin: 40, name: 'GPIO 21 (SPI1 SCLK)', type: 'gpio' }
         ];
 
         function renderPinout() {
             const grid = document.getElementById('pin-grid');
-            piPinout.forEach((pinData, index) => {
-                const isLeft = index % 2 === 0;
-                const pinDiv = document.createElement('div');
-                
-                let classes = `pin pin-${isLeft ? 'left' : 'right'} ${pinData.type}`;
-                if (pinData.highlight) classes += ' highlight';
-                pinDiv.className = classes;
+            grid.innerHTML = ''; // Clear previous renders
+            
+            // Map rows based on physical pin configuration constraints
+            // Row 1: Top header line (Even Pins)
+            const evenPins = piPinout.filter(p => p.pin % 2 === 0);
+            // Row 2: Bottom header line (Odd Pins)
+            const oddPins = piPinout.filter(p => p.pin % 2 !== 0);
 
-                const pinNumHtml = `<span class="pin-num">${pinData.pin}</span>`;
-                const nameHtml = `<span>${pinData.name}</span>`;
+            const renderRow = (pins) => {
+                pins.forEach(pinData => {
+                    const pinDiv = document.createElement('div');
+                    
+                    let classes = `pin ${pinData.type}`;
+                    if (pinData.highlight) classes += ' highlight';
+                    pinDiv.className = classes;
+                    
+                    // Render minimalist circular representation
+                    pinDiv.textContent = pinData.pin;
+                    
+                    // Native HTML tooltip until custom Modal is integrated
+                    pinDiv.title = `Pin ${pinData.pin}: ${pinData.name}`;
+                    
+                    grid.appendChild(pinDiv);
+                });
+            };
 
-                if (isLeft) {
-                    pinDiv.innerHTML = nameHtml + pinNumHtml;
-                } else {
-                    pinDiv.innerHTML = pinNumHtml + nameHtml;
-                }
-                
-                grid.appendChild(pinDiv);
-            });
+            // Maintain sequential topological ordering
+            renderRow(evenPins);
+            renderRow(oddPins);
         }
 
         function switchTab(tabId) {
