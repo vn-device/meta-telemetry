@@ -303,6 +303,124 @@
         }
         .legend-reserved .legend-label { color: var(--accent); }
 
+        /* Modal Context Card */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 420px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+
+        .modal-header h3 { 
+            margin: 0; 
+            font-size: 18px; 
+            font-family: monospace; 
+            color: var(--accent); 
+        }
+
+        .modal-close { 
+            background: none; 
+            border: none; 
+            color: var(--text-secondary); 
+            font-size: 24px; 
+            cursor: pointer; 
+            line-height: 1;
+        }
+        .modal-close:hover { color: var(--danger); }
+        
+        .modal-desc { 
+            font-size: 14px; 
+            color: var(--text-secondary); 
+            line-height: 1.5; 
+            margin-bottom: 24px; 
+        }
+
+        .read-only-badge {
+            background-color: rgba(117, 117, 117, 0.1);
+            color: var(--pin-gnd);
+            border: 1px dashed var(--pin-gnd);
+            padding: 12px;
+            text-align: center;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 0.05em;
+        }
+
+        /* Modal Interactive Controls */
+        .control-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 12px;
+            background-color: var(--bg-base);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .control-group label { font-size: 14px; font-weight: 500; }
+
+        .segmented-control {
+            display: flex;
+            background-color: var(--bg-surface-elevated);
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .segmented-control button {
+            background: none; border: none; color: var(--text-secondary);
+            padding: 6px 16px; font-size: 12px; font-weight: bold; cursor: pointer;
+            transition: background 0.1s;
+        }
+        .segmented-control button.active { 
+            background-color: var(--accent); 
+            color: #000; 
+        }
+
+        /* Hardware Slide Toggle */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { 
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; 
+            background-color: var(--bg-surface-elevated); transition: .2s; border-radius: 24px; 
+            border: 1px solid var(--border);
+        }
+        .slider:before { 
+            position: absolute; content: ""; height: 16px; width: 16px; 
+            left: 3px; bottom: 3px; background-color: var(--text-secondary); 
+            transition: .2s; border-radius: 50%; 
+        }
+        input:checked + .slider { background-color: rgba(129, 199, 132, 0.2); border-color: var(--pin-gpio); }
+        input:checked + .slider:before { transform: translateX(20px); background-color: var(--pin-gpio); }
+        
+        .state-label { 
+            font-family: monospace; font-size: 13px; font-weight: bold; 
+            min-width: 90px; text-align: right; color: var(--text-primary);
+        }
+
         .footer {
             text-align: center;
             margin-top: 10px;
@@ -322,6 +440,22 @@
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('telemetry')">Telemetry Overview</button>
             <button class="tab-btn" onclick="switchTab('gpio')">I/O Pinout</button>
+        </div>
+
+        <!-- Interactive Pin Overlay Modal -->
+        <div id="pin-modal-overlay" class="modal-overlay" onclick="handleOverlayClick(event)">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3 id="modal-title">Pin X: --</h3>
+                    <button class="modal-close" onclick="closePinModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p id="modal-desc" class="modal-desc">--</p>
+                    <div id="modal-controls">
+                        <!-- Dynamic DOM injection by JavaScript -->
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="tab-telemetry" class="tab-content active">
@@ -408,6 +542,9 @@
             { pin: 39, name: 'Ground', type: 'gnd' },         { pin: 40, name: 'GPIO 21 (SPI1 SCLK)', type: 'gpio' }
         ];
 
+        // Isolated Frontend State Dictionary
+        const frontendGpioState = {};
+
         function renderPinout() {
             const grid = document.getElementById('pin-grid');
             grid.innerHTML = ''; // Clear previous renders
@@ -429,8 +566,8 @@
                     // Render minimalist circular representation
                     pinDiv.textContent = pinData.pin;
                     
-                    // Native HTML tooltip until custom Modal is integrated
-                    pinDiv.title = `Pin ${pinData.pin}: ${pinData.name}`;
+                    // Bind click event to trigger Contextual Modal
+                    pinDiv.onclick = () => openPinModal(pinData.pin);
                     
                     grid.appendChild(pinDiv);
                 });
@@ -439,6 +576,76 @@
             // Maintain sequential topological ordering
             renderRow(evenPins);
             renderRow(oddPins);
+        }
+
+        function openPinModal(pinId) {
+            const pinData = piPinout.find(p => p.pin === pinId);
+            if (!pinData) return;
+
+            const title = document.getElementById('modal-title');
+            const desc = document.getElementById('modal-desc');
+            const controls = document.getElementById('modal-controls');
+
+            title.textContent = `Pin ${pinData.pin}: ${pinData.name}`;
+
+            if (pinData.type === 'power5v' || pinData.type === 'power3v3' || pinData.type === 'gnd' || pinData.type === 'reserved') {
+                // Case A: System Hard-Wired Lines
+                if (pinData.type === 'power5v') desc.textContent = "5V power rail. Connected directly to main system power input.";
+                if (pinData.type === 'power3v3') desc.textContent = "3.3V power rail sourced from the onboard PMIC. Maximum combined current draw must not exceed 50mA.";
+                if (pinData.type === 'gnd') desc.textContent = "0V reference plane for digital signals and return currents.";
+                if (pinData.type === 'reserved') desc.textContent = "Reserved I2C EEPROM interface for HAT auto-probing. Manipulation may corrupt boot sequence.";
+                
+                controls.innerHTML = `<div class="read-only-badge">SYSTEM HARD-WIRED (READ-ONLY)</div>`;
+            } else {
+                // Case B: Configurable GPIO Lines
+                desc.textContent = "Configurable GPIO pin interfaced via the RP1 southbridge. Max source/sink current is 15mA per pin.";
+                
+                // Initialize default frontend mock state
+                if (!frontendGpioState[pinId]) {
+                    frontendGpioState[pinId] = { mode: 'IN', val: 0 };
+                }
+                const state = frontendGpioState[pinId];
+
+                controls.innerHTML = `
+                    <div class="control-group">
+                        <label>Direction</label>
+                        <div class="segmented-control">
+                            <button class="${state.mode === 'IN' ? 'active' : ''}" onclick="updatePinMode(${pinId}, 'IN')">INPUT</button>
+                            <button class="${state.mode === 'OUT' ? 'active' : ''}" onclick="updatePinMode(${pinId}, 'OUT')">OUTPUT</button>
+                        </div>
+                    </div>
+                    <div class="control-group" id="state-toggle-group" style="display: ${state.mode === 'OUT' ? 'flex' : 'none'};">
+                        <label>Voltage State</label>
+                        <label class="switch">
+                            <input type="checkbox" ${state.val === 1 ? 'checked' : ''} onchange="updatePinState(${pinId}, this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <span id="pin-state-label-${pinId}" class="state-label">${state.val === 1 ? 'HIGH (3.3V)' : 'LOW (0V)'}</span>
+                    </div>
+                `;
+            }
+
+            document.getElementById('pin-modal-overlay').style.display = 'flex';
+        }
+
+        function closePinModal() {
+            document.getElementById('pin-modal-overlay').style.display = 'none';
+        }
+
+        function handleOverlayClick(event) {
+            if (event.target.id === 'pin-modal-overlay') {
+                closePinModal();
+            }
+        }
+
+        function updatePinMode(pinId, mode) {
+            frontendGpioState[pinId].mode = mode;
+            openPinModal(pinId); // Force re-render of modal DOM
+        }
+
+        function updatePinState(pinId, isHigh) {
+            frontendGpioState[pinId].val = isHigh ? 1 : 0;
+            document.getElementById(`pin-state-label-${pinId}`).textContent = isHigh ? 'HIGH (3.3V)' : 'LOW (0V)';
         }
 
         function switchTab(tabId) {
