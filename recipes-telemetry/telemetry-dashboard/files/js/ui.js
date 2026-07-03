@@ -1,4 +1,5 @@
-function renderPinout() {
+function renderPinout()
+{
     const grid = document.getElementById('pin-grid');
     grid.innerHTML = ''; 
     
@@ -15,7 +16,7 @@ function renderPinout() {
             
             pinDiv.textContent = pinData.pin;
             pinDiv.title = `Pin ${pinData.pin}: ${pinData.name}`;
-            pinDiv.onclick = () => openPinModal(pinData.pin);
+            pinDiv.onclick = () => window.openPinModal(pinData.pin);
             
             grid.appendChild(pinDiv);
         });
@@ -25,7 +26,8 @@ function renderPinout() {
     renderRow(oddPins);
 }
 
-function openPinModal(pinId) {
+window.openPinModal = function(pinId)
+{
     const pinData = piPinout.find(p => p.pin === pinId);
     if (!pinData) return;
 
@@ -35,14 +37,20 @@ function openPinModal(pinId) {
 
     title.textContent = `Pin ${pinData.pin}: ${pinData.name}`;
 
-    if (pinData.type === 'power5v' || pinData.type === 'power3v3' || pinData.type === 'gnd' || pinData.type === 'reserved') {
+    // Reset any pending visual states
+    controls.style.opacity = '1';
+    controls.style.pointerEvents = 'auto';
+
+    if (pinData.type === 'power5v' || pinData.type === 'power3v3' || pinData.type === 'gnd' || pinData.type === 'reserved')
+    {
         if (pinData.type === 'power5v') desc.textContent = "5V power rail. Connected directly to main system power input.";
         if (pinData.type === 'power3v3') desc.textContent = "3.3V power rail sourced from the onboard PMIC. Maximum combined current draw must not exceed 50mA.";
         if (pinData.type === 'gnd') desc.textContent = "0V reference plane for digital signals and return currents.";
         if (pinData.type === 'reserved') desc.textContent = "Reserved I2C EEPROM interface for HAT auto-probing. Manipulation may corrupt boot sequence.";
         
         controls.innerHTML = `<div class="read-only-badge">SYSTEM HARD-WIRED (READ-ONLY)</div>`;
-    } else {
+    }
+    else {
         desc.textContent = "Configurable GPIO pin interfaced via the RP1 southbridge. Max source/sink current is 15mA per pin.";
         
         if (!frontendGpioState[pinId]) {
@@ -70,36 +78,93 @@ function openPinModal(pinId) {
     }
 
     document.getElementById('pin-modal-overlay').style.display = 'flex';
-}
+};
 
-function closePinModal() {
+function closePinModal()
+{
     document.getElementById('pin-modal-overlay').style.display = 'none';
 }
 
-function handleOverlayClick(event) {
+function handleOverlayClick(event)
+{
     if (event.target.id === 'pin-modal-overlay') {
         closePinModal();
     }
 }
 
-function updatePinMode(pinId, mode) {
-    frontendGpioState[pinId].mode = mode;
-    openPinModal(pinId); 
+// --- Task 2.4: Uplink Command Construction and Latency UI ---
+
+function sendGpioCommand(pinId, mode, val)
+{
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert("Cannot execute command: Backend daemon is currently disconnected.");
+        window.openPinModal(pinId); // Re-render to revert toggle UI visually
+        return;
+    }
+
+    // 1. Lock the UI (Pending State)
+    const controls = document.getElementById('modal-controls');
+    if (controls) {
+        controls.style.opacity = '0.5';
+        controls.style.pointerEvents = 'none';
+    }
+
+    // 2. Transmit the JSON Schema Request
+    const commandFrame = {
+        type: 'WRITE_GPIO_REQUEST',
+        timestamp: Date.now(),
+        payload: {
+            pin: pinId,
+            mode: mode,
+            val: val
+        }
+    };
+    ws.send(JSON.stringify(commandFrame));
 }
 
-function updatePinState(pinId, isHigh) {
-    frontendGpioState[pinId].val = isHigh ? 1 : 0;
-    document.getElementById(`pin-state-label-${pinId}`).textContent = isHigh ? 'HIGH (3.3V)' : 'LOW (0V)';
+function updatePinMode(pinId, mode)
+{
+    const currentVal = frontendGpioState[pinId] ? frontendGpioState[pinId].val : 0;
+    sendGpioCommand(pinId, mode, currentVal);
 }
 
-function switchTab(tabId) {
+function updatePinState(pinId, isHigh)
+{
+    const currentMode = frontendGpioState[pinId] ? frontendGpioState[pinId].mode : 'OUT';
+    const val = isHigh ? 1 : 0;
+    sendGpioCommand(pinId, currentMode, val);
+}
+
+// Invoked by network.js when the daemon acknowledges the command
+window.handleCommandResponse = function(payload)
+{
+    const controls = document.getElementById('modal-controls');
+    
+    // 3. Unlock the UI
+    if (controls) {
+        controls.style.opacity = '1';
+        controls.style.pointerEvents = 'auto';
+    }
+
+    if (payload.status === "ERROR") {
+        alert(`Hardware Interlock Triggered for Pin ${payload.pin}: ${payload.message}`);
+        // Force a re-render of the modal to snap the switch back to its true hardware state
+        window.openPinModal(payload.pin);
+    }
+    // On SUCCESS, we do nothing. We wait for the next SYSTEM_STATE_REPORT push from 
+    // the daemon (handled in network.js) to globally overwrite frontendGpioState and refresh the UI.
+};
+
+function switchTab(tabId)
+{
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     
     document.getElementById(`tab-${tabId}`).classList.add('active');
     if (window.event && window.event.currentTarget) {
         window.event.currentTarget.classList.add('active');
-    } else {
+    }
+    else {
         const btn = document.querySelector(`button[onclick="switchTab('${tabId}')"]`);
         if (btn) btn.classList.add('active');
     }
@@ -107,5 +172,7 @@ function switchTab(tabId) {
 
 window.onload = () => {
     renderPinout();
-    connectWebSocket();
+    if (typeof connectWebSocket === 'function') {
+        connectWebSocket();
+    }
 };
