@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core WebSockets)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -14,7 +16,10 @@ add_executable(telemetry_daemon
     TelemetryServer.h
 )
 
+target_include_directories(telemetry_daemon PRIVATE ${GPIOD_INCLUDE_DIRS})
+
 target_link_libraries(telemetry_daemon PRIVATE
     Qt6::Core
     Qt6::WebSockets
+    ${GPIOD_LIBRARIES}
 )

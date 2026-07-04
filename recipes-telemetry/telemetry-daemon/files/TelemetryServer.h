@@ -7,9 +7,10 @@
 #include <QTimer>
 #include <QList>
 #include <QElapsedTimer>
+#include <gpiod.hpp> 
+#include <map>
 
-class TelemetryServer : public QObject
-{
+class TelemetryServer : public QObject {
     Q_OBJECT
 public:
     explicit TelemetryServer(quint16 port, QObject *parent = nullptr);
@@ -26,13 +27,12 @@ private:
     QList<QWebSocket *> m_clients;
     QTimer *m_pHeartbeatTimer;
     
-    // Track daemon runtime internally
+    // Uptime tracking
     QElapsedTimer m_uptimeTimer;
-    
-    void sendSystemState(QWebSocket *client);
-    
-    // Helper to read Linux OS uptime
     qint64 getOsUptime();
+    
+    // Hardware interface (libgpiod v2)
+    std::map<int, gpiod::line_request> m_activeLines;
 };
 
 #endif // TELEMETRYSERVER_H
