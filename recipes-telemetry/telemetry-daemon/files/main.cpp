@@ -3,12 +3,12 @@
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication app(argc, argv);
+    // QCoreApplication provides the event loop necessary for asynchronous networking
+    QCoreApplication a(argc, argv);
     
-    // Listen on port 8080. The UI will establish a connection to ws://<Pi_IP>:8080
-    TelemetryServer daemon(8080);
+    // Instantiate our WebSocket server on the port expected by the frontend
+    TelemetryServer server(8080);
     
-    // Enter the Qt event loop. This blocks indefinitely, efficiently routing 
-    // underlying Linux epoll system events to your connected C++ slots.
-    return app.exec();
+    // Start the event loop (this blocks and keeps the daemon running)
+    return a.exec();
 }

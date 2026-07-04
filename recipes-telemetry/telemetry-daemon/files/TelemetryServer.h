@@ -4,31 +4,35 @@
 #include <QObject>
 #include <QWebSocketServer>
 #include <QWebSocket>
-#include <QList>
 #include <QTimer>
-#include <QJsonObject>
-#include <QJsonDocument>
+#include <QList>
+#include <QElapsedTimer>
 
-class TelemetryServer : public QObject {
+class TelemetryServer : public QObject
+{
     Q_OBJECT
 public:
     explicit TelemetryServer(quint16 port, QObject *parent = nullptr);
-    ~TelemetryServer() override;
+    ~TelemetryServer();
 
 private slots:
     void onNewConnection();
     void processTextMessage(const QString &message);
     void socketDisconnected();
-    void broadcastTelemetry();
+    void broadcastHeartbeat();
 
 private:
-    QWebSocketServer *m_server;
+    QWebSocketServer *m_pWebSocketServer;
     QList<QWebSocket *> m_clients;
-    QTimer *m_telemetryTimer;
-
-    // Track active runtime parameters
-    uint64_t m_osRuntime;
-    uint64_t m_appRuntime;
-    bool m_gpio14State;
+    QTimer *m_pHeartbeatTimer;
+    
+    // Track daemon runtime internally
+    QElapsedTimer m_uptimeTimer;
+    
+    void sendSystemState(QWebSocket *client);
+    
+    // Helper to read Linux OS uptime
+    qint64 getOsUptime();
 };
+
 #endif // TELEMETRYSERVER_H

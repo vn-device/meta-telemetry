@@ -1,90 +1,143 @@
 #include "TelemetryServer.h"
-#include <sys/sysinfo.h>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QDateTime>
 #include <QDebug>
+#include <QFile>
 
-TelemetryServer::TelemetryServer(quint16 port, QObject *parent)
-    : QObject(parent),
-      m_server(new QWebSocketServer(QStringLiteral("Telemetry Daemon"), QWebSocketServer::NonSecureMode, this)),
-      m_appRuntime(0),
-      m_gpio14State(false)
+TelemetryServer::TelemetryServer(quint16 port, QObject *parent) :
+    QObject(parent),
+    m_pWebSocketServer(
+        new QWebSocketServer(
+            QStringLiteral("Telemetry Server"),
+            QWebSocketServer::NonSecureMode, this
+        )
+    )
 {
-    if (m_server->listen(QHostAddress::Any, port)) {
-        qInfo() << "Telemetry WebSocket Server listening on port" << port;
-        connect(m_server, &QWebSocketServer::newConnection, this, &TelemetryServer::onNewConnection);
-    }
-    else {
-        qFatal("Failed to bind WebSocket server to port %d", port);
-    }
+    // Start tracking daemon uptime
+    m_uptimeTimer.start();
 
-    // Baseline broadcast loop (500ms).
-    // For pure interrupt-driven architecture, this timer will be replaced
-    // by QSocketNotifier watching the libgpiod file descriptor.
-    m_telemetryTimer = new QTimer(this);
-    connect(m_telemetryTimer, &QTimer::timeout, this, &TelemetryServer::broadcastTelemetry);
-    m_telemetryTimer->start(500);
+    if (m_pWebSocketServer->listen(QHostAddress::Any, port)) {
+        qDebug() << "Telemetry Server up and listening on port" << port;
+        
+        connect(m_pWebSocketServer, &QWebSocketServer::newConnection,
+                this, &TelemetryServer::onNewConnection);
+                
+        m_pHeartbeatTimer = new QTimer(this);
+        connect(m_pHeartbeatTimer, &QTimer::timeout, this, &TelemetryServer::broadcastHeartbeat);
+        m_pHeartbeatTimer->start(1000); 
+    }
 }
 
-TelemetryServer::~TelemetryServer() {
-    m_server->close();
+TelemetryServer::~TelemetryServer()
+{
+    m_pWebSocketServer->close();
     qDeleteAll(m_clients.begin(), m_clients.end());
+}
+
+qint64 TelemetryServer::getOsUptime()
+{
+    QFile file("/proc/uptime");
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QString line = file.readLine();
+        // The first value in /proc/uptime is the total OS uptime in seconds
+        return line.split(' ').first().toDouble();
+    }
+    return 0;
 }
 
 void TelemetryServer::onNewConnection()
 {
-    QWebSocket *clientSocket = m_server->nextPendingConnection();
+    QWebSocket *pSocket = m_pWebSocketServer->nextPendingConnection();
     
-    // Connect socket signals to class slots to handle data and closures
-    connect(clientSocket, &QWebSocket::textMessageReceived, this, &TelemetryServer::processTextMessage);
-    connect(clientSocket, &QWebSocket::disconnected, this, &TelemetryServer::socketDisconnected);
-
-    m_clients << clientSocket;
-    qInfo() << "New telemetry client connected. Total clients:" << m_clients.size();
+    connect(pSocket, &QWebSocket::textMessageReceived, this, &TelemetryServer::processTextMessage);
+    connect(pSocket, &QWebSocket::disconnected, this, &TelemetryServer::socketDisconnected);
+    
+    m_clients << pSocket;
+    qDebug() << "Client connected:" << pSocket->peerAddress().toString();
 }
 
 void TelemetryServer::processTextMessage(const QString &message)
 {
-    // Bi-directional IPC support. Allows the web dashboard to send commands directly to the hardware.
-    if (message == "TOGGLE_GPIO_14") {
-        m_gpio14State = !m_gpio14State;
-        qInfo() << "Command received: Toggling GPIO 14 to" << (m_gpio14State ? "HIGH" : "LOW");
-        broadcastTelemetry(); // Force immediate update
+    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+    if (!pClient) return;
+
+    QJsonParseError error;
+    QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &error);
+    
+    if (error.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning() << "Invalid JSON schema received:" << error.errorString();
+        return;
+    }
+
+    QJsonObject root = doc.object();
+    QString type = root["type"].toString();
+
+    if (type == "CLIENT_HELLO") {
+        sendSystemState(pClient);
+    } 
+    else if (type == "WRITE_GPIO_REQUEST") {
+        QJsonObject payload = root["payload"].toObject();
+        int pin = payload["pin"].toInt();
+        
+        QJsonObject responsePayload;
+        responsePayload["status"] = "SUCCESS";
+        responsePayload["pin"] = pin;
+        
+        QJsonObject response;
+        response["type"] = "COMMAND_RESPONSE";
+        response["timestamp"] = QDateTime::currentMSecsSinceEpoch();
+        response["payload"] = responsePayload;
+        
+        pClient->sendTextMessage(QJsonDocument(response).toJson(QJsonDocument::Compact));
     }
 }
 
 void TelemetryServer::socketDisconnected()
 {
-    QWebSocket *clientSocket = qobject_cast<QWebSocket *>(sender());
-    if (clientSocket) {
-        m_clients.removeAll(clientSocket);
-        
-        // Critical: Queue object deletion in the Qt event loop to prevent memory leaks 
-        // without crashing the active network handler.
-        clientSocket->deleteLater(); 
-        qInfo() << "Client disconnected. Remaining:" << m_clients.size();
+    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+    if (pClient) {
+        m_clients.removeAll(pClient);
+        pClient->deleteLater();
+        qDebug() << "Client disconnected";
     }
 }
 
-void TelemetryServer::broadcastTelemetry()
+void TelemetryServer::broadcastHeartbeat()
 {
-    if (m_clients.isEmpty()) return;
-
-    // Retrieve POSIX kernel uptime
-    struct sysinfo info;
-    sysinfo(&info);
-    m_osRuntime = info.uptime;
-    m_appRuntime += 500; // Increment by timer interval (ms)
-
-    // Construct the JSON telemetry payload
+    // Inject runtime metrics into the heartbeat payload
     QJsonObject payload;
-    payload["os_runtime"] = static_cast<qint64>(m_osRuntime);
-    payload["app_runtime"] = static_cast<qint64>(m_appRuntime / 1000);
-    payload["gpio_14"] = m_gpio14State ? "HIGH" : "LOW";
+    payload["daemon_uptime"] = m_uptimeTimer.elapsed() / 1000;
+    payload["os_uptime"] = getOsUptime();
 
-    QJsonDocument doc(payload);
-    QString jsonString = doc.toJson(QJsonDocument::Compact);
-
-    // O(N) broadcast to all connected sink dashboards
+    QJsonObject heartbeat;
+    heartbeat["type"] = "HEARTBEAT";
+    heartbeat["timestamp"] = QDateTime::currentMSecsSinceEpoch();
+    heartbeat["payload"] = payload; // Added payload
+    
+    QString message = QJsonDocument(heartbeat).toJson(QJsonDocument::Compact);
+    
     for (QWebSocket *client : std::as_const(m_clients)) {
-        client->sendTextMessage(jsonString);
+        client->sendTextMessage(message);
     }
+}
+
+void TelemetryServer::sendSystemState(QWebSocket *client)
+{
+    QJsonObject pins;
+    QJsonObject pin8;
+    pin8["mode"] = "OUT";
+    pin8["val"] = 0;
+    pins["8"] = pin8;
+
+    QJsonObject payload;
+    payload["pins"] = pins;
+
+    QJsonObject report;
+    report["type"] = "SYSTEM_STATE_REPORT";
+    report["timestamp"] = QDateTime::currentMSecsSinceEpoch();
+    report["payload"] = payload;
+
+    client->sendTextMessage(QJsonDocument(report).toJson(QJsonDocument::Compact));
 }

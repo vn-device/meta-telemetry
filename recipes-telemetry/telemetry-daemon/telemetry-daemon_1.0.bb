@@ -7,6 +7,9 @@ inherit qt6-cmake systemd
 
 DEPENDS = "qtbase qtwebsockets"
 
+SYSTEMD_SERVICE:${PN} = "telemetry-daemon.service"
+SYSTEMD_AUTO_ENABLE = "enable"
+
 SRC_URI = " \
     file://CMakeLists.txt \
     file://main.cpp \
@@ -17,21 +20,14 @@ SRC_URI = " \
 
 S = "${WORKDIR}"
 
-# Define the systemd service file and explicitly enable it on boot
-SYSTEMD_SERVICE:${PN} = "telemetry-daemon.service"
-SYSTEMD_AUTO_ENABLE = "enable"
-
 do_install() {
-    # Install the compiled C++ binary
+    # Install the compiled binary from the CMake Build directory (${B})
     install -d ${D}${bindir}
-    install -m 0755 telemetry_daemon ${D}${bindir}/telemetry_daemon
+    install -m 0755 ${B}/telemetry_daemon ${D}${bindir}/telemetry_daemon
 
-    # Install the systemd service unit
+    # Install the systemd service file from the Working directory
     install -d ${D}${systemd_system_unitdir}
-    install -m 0644 ${WORKDIR}/telemetry-daemon.service ${D}${systemd_system_unitdir}
+    install -m 0644 ${WORKDIR}/telemetry-daemon.service ${D}${systemd_system_unitdir}/
 }
 
-FILES:${PN} += " \
-    ${bindir}/telemetry_daemon \
-    ${systemd_system_unitdir}/telemetry-daemon.service \
-"
+FILES:${PN} += "${bindir}/telemetry_daemon"
