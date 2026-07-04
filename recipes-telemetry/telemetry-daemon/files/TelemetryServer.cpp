@@ -7,6 +7,20 @@
 #include <QThread>
 #include <utility>
 #include <gpiod.hpp>
+#include <map>
+
+// Translates physical header pins (1-40) to internal RP1 SoC line offsets
+static int getBcmFromPhysical(int physicalPin) {
+    static const std::map<int, int> pinMap = {
+        {3, 2}, {5, 3}, {7, 4}, {8, 14}, {10, 15}, {11, 17},
+        {12, 18}, {13, 27}, {15, 22}, {16, 23}, {18, 24},
+        {19, 10}, {21, 9}, {22, 25}, {23, 11}, {24, 8},
+        {26, 7}, {29, 5}, {31, 6}, {32, 12}, {33, 13},
+        {35, 19}, {36, 16}, {37, 26}, {38, 20}, {40, 21}
+    };
+    auto it = pinMap.find(physicalPin);
+    return (it != pinMap.end()) ? it->second : -1;
+}
 
 TelemetryServer::TelemetryServer(quint16 port, QObject *parent) :
     QObject(parent),
@@ -62,19 +76,32 @@ void TelemetryServer::processTextMessage(const QString &message) {
     
     if (root["type"].toString() == "WRITE_GPIO_REQUEST") {
         QJsonObject payload = root["payload"].toObject();
-        int pin = payload["pin"].toInt();
+        int physicalPin = payload["pin"].toInt();
         int val = payload["val"].toInt();
         QString mode = payload["mode"].toString();
         
         QJsonObject response;
         response["type"] = "COMMAND_RESPONSE";
         QJsonObject responsePayload;
-        responsePayload["pin"] = pin;
+        // Keep the response mapped to the physical pin for the UI
+        responsePayload["pin"] = physicalPin;
+        
+        // Translate physical header pin to hardware offset
+        int bcmPin = getBcmFromPhysical(physicalPin);
+        
+        if (bcmPin == -1) {
+            responsePayload["status"] = "ERROR";
+            responsePayload["message"] = "Invalid or non-configurable physical pin requested.";
+            response["payload"] = responsePayload;
+            pClient->sendTextMessage(QJsonDocument(response).toJson(QJsonDocument::Compact));
+            return;
+        }
         
         try {
-            auto it = m_activeLines.find(pin);
+            // Track the active lines using the physical pin as the map key
+            auto it = m_activeLines.find(physicalPin);
             
-            // If the line is already open, we MUST re-request it to change direction in libgpiod v2
+            // If the line is already open, we MUST re-request it to change direction
             if (it != m_activeLines.end()) {
                 m_activeLines.erase(it);
             }
@@ -89,15 +116,16 @@ void TelemetryServer::processTextMessage(const QString &message) {
                 settings.set_direction(gpiod::line::direction::INPUT);
             }
             
+            // CRITICAL: Request the BCM hardware line, NOT the physical header number
             auto req = chip.prepare_request()
                 .set_consumer("telemetry-daemon")
-                .add_line_settings(pin, settings)
+                .add_line_settings(bcmPin, settings) 
                 .do_request();
                 
             // Safely emplace it to avoid default constructor restrictions
-            m_activeLines.emplace(pin, std::move(req));
+            m_activeLines.emplace(physicalPin, std::move(req));
             
-            qDebug() << "Hardware GPIO" << pin << "mode:" << mode << "val:" << val;
+            qDebug() << "Hardware GPIO BCM:" << bcmPin << "(Physical:" << physicalPin << ") mode:" << mode << "val:" << val;
             responsePayload["status"] = "SUCCESS";
         } catch (const std::exception& e) {
             qWarning() << "libgpiod error:" << e.what();

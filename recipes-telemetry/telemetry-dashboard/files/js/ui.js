@@ -92,12 +92,10 @@ function handleOverlayClick(event)
     }
 }
 
-// --- Task 2.4: Uplink Command Construction and Latency UI ---
-
 function sendGpioCommand(pinId, mode, val)
 {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-        alert("Cannot execute command: Backend daemon is currently disconnected.");
+        console.error("Cannot execute command: Backend daemon is currently disconnected.");
         window.openPinModal(pinId); // Re-render to revert toggle UI visually
         return;
     }
@@ -108,6 +106,10 @@ function sendGpioCommand(pinId, mode, val)
         controls.style.opacity = '0.5';
         controls.style.pointerEvents = 'none';
     }
+    
+    // Optimistic State Update
+    // Save what the user requested so the UI updates instantly on success
+    frontendGpioState[pinId] = { mode: mode, val: val };
 
     // 2. Transmit the JSON Schema Request
     const commandFrame = {
@@ -135,7 +137,6 @@ function updatePinState(pinId, isHigh)
     sendGpioCommand(pinId, currentMode, val);
 }
 
-// Invoked by network.js when the daemon acknowledges the command
 window.handleCommandResponse = function(payload)
 {
     const controls = document.getElementById('modal-controls');
@@ -147,12 +148,11 @@ window.handleCommandResponse = function(payload)
     }
 
     if (payload.status === "ERROR") {
-        alert(`Hardware Interlock Triggered for Pin ${payload.pin}: ${payload.message}`);
-        // Force a re-render of the modal to snap the switch back to its true hardware state
-        window.openPinModal(payload.pin);
+        console.error(`Hardware Interlock Triggered for Pin ${payload.pin}: ${payload.message}`);
     }
-    // On SUCCESS, we do nothing. We wait for the next SYSTEM_STATE_REPORT push from 
-    // the daemon (handled in network.js) to globally overwrite frontendGpioState and refresh the UI.
+    
+    // Re-render the modal to reflect the new state immediately
+    window.openPinModal(payload.pin);
 };
 
 function switchTab(tabId)
