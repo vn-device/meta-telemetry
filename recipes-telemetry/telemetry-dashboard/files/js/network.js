@@ -88,16 +88,17 @@ function startSentinel()
 {
     if (sentinelTimer) clearInterval(sentinelTimer);
     
+    // Check every 1s, trigger if no heartbeat for 3s (tightened from 10s)
     sentinelTimer = setInterval(() => {
         const now = Date.now();
-        if (now - lastHeartbeat > 10000) {
-            console.warn("Sentinel Watchdog: Daemon timeout detected.");
+        if (now - lastHeartbeat > 3000) { 
+            console.warn("Sentinel Watchdog: Connection lost (Timeout threshold reached).");
             handleDisconnect();
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.close();
             }
         }
-    }, 2000);
+    }, 1000);
 }
 
 function handleDisconnect()
