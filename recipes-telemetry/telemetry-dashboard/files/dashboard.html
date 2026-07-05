@@ -5,12 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pi 5 RP1 Console</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
         <div class="header">
             <h1>Pi 5 RP1 Console</h1>
-            <div id="conn-status" class="status-badge">Disconnected</div>
+            <div class="header-controls">
+                <button id="theme-toggle" class="icon-btn" onclick="toggleTheme()" title="Toggle Light/Dark Mode">
+                    <!-- Sun Icon (Hidden in Dark Mode) -->
+                    <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                    <!-- Moon Icon (Visible in Dark Mode) -->
+                    <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+                <div id="conn-status" class="status-badge">Disconnected</div>
+            </div>
         </div>
 
         <div class="tabs">
@@ -18,25 +27,24 @@
             <button class="tab-btn" onclick="switchTab('gpio')">I/O Pinout</button>
         </div>
 
-        <!-- Interactive Pin Overlay Modal -->
-        <div id="pin-modal-overlay" class="modal-overlay" onclick="handleOverlayClick(event)">
-            <div class="modal-card">
+        <!-- Reusable Modal Overlay for both Pins and Metrics -->
+        <div id="shared-modal-overlay" class="modal-overlay" onclick="handleOverlayClick(event)">
+            <div class="modal-card" id="modal-card-container">
                 <div class="modal-header">
-                    <h3 id="modal-title">Pin X: --</h3>
-                    <button class="modal-close" onclick="closePinModal()">&times;</button>
+                    <h3 id="modal-title">--</h3>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
                 </div>
-                <div class="modal-body">
-                    <p id="modal-desc" class="modal-desc">--</p>
-                    <div id="modal-controls">
-                        <!-- Dynamic DOM injection by JavaScript -->
-                    </div>
+                <div class="modal-body" id="modal-body-content">
+                    <!-- JS will inject Pin Controls OR Canvas Graph here -->
                 </div>
             </div>
         </div>
 
         <div id="tab-telemetry" class="tab-content active">
-            <div class="grid-cards">
-                <!-- Removed Redundant Navigation Mode -->
+
+            <!-- Primary Status Group -->
+            <div class="controls-header">Primary Status</div>
+            <div class="grid-cards" style="margin-bottom: 20px;">
                 <div class="card">
                     <span class="card-label">OS Uptime</span>
                     <span id="os-runtime" class="card-value">0s</span>
@@ -46,39 +54,48 @@
                     <span id="app-runtime" class="card-value">0s</span>
                 </div>
             </div>
+
+            <!-- System Diagnostics Group -->
+            <div class="controls-header">System Diagnostics</div>
+            <div class="grid-cards" style="margin-bottom: 20px;">
+                <!-- Added hover-clickable class and onclick handler -->
+                <div class="card hover-clickable" onclick="openMetricModal('cpu')">
+                    <span class="card-label">CPU Temp (Inspect)</span>
+                    <span id="cpu-temp" class="card-value">--°C</span>
+                </div>
+                <div class="card">
+                    <span class="card-label">Load Average</span>
+                    <span id="load-avg" class="card-value">--</span>
+                </div>
+            </div>
+
+            <!-- System Health Group -->
+            <div class="controls-header">System Health</div>
+            <div class="grid-cards">
+                <!-- Added hover-clickable class and onclick handler -->
+                <div class="card hover-clickable" onclick="openMetricModal('ram')">
+                    <span class="card-label">RAM Usage (Inspect)</span>
+                    <span id="ram-usage" class="card-value">--%</span>
+                </div>
+                <div class="card">
+                    <span class="card-label">Under-Voltage</span>
+                    <span id="undervoltage" class="card-value" style="font-size: 18px; margin-top: 10px;">--</span>
+                </div>
+            </div>
         </div>
 
         <div id="tab-gpio" class="tab-content">
             <div class="pinout-container">
                 <div class="controls-header" style="text-align: center;">Raspberry Pi 5 J8 Header</div>
                 <div class="pinout-wrapper">
-                    <div id="pin-grid" class="pin-grid">
-                        <!-- JavaScript populates grid here -->
-                    </div>
+                    <div id="pin-grid" class="pin-grid"></div>
                 </div>
-                
-                <!-- Minimalist Color Legend -->
                 <div class="legend-container">
-                    <div class="legend-item legend-5v">
-                        <div class="legend-ring"></div>
-                        <span class="legend-label">5V Power</span>
-                    </div>
-                    <div class="legend-item legend-3v3">
-                        <div class="legend-ring"></div>
-                        <span class="legend-label">3.3V Power</span>
-                    </div>
-                    <div class="legend-item legend-gnd">
-                        <div class="legend-ring"></div>
-                        <span class="legend-label">Ground</span>
-                    </div>
-                    <div class="legend-item legend-gpio">
-                        <div class="legend-ring"></div>
-                        <span class="legend-label">Configurable I/O</span>
-                    </div>
-                    <div class="legend-item legend-reserved">
-                        <div class="legend-ring"></div>
-                        <span class="legend-label">System Reserved</span>
-                    </div>
+                    <div class="legend-item legend-5v"><div class="legend-ring"></div><span class="legend-label">5V Power</span></div>
+                    <div class="legend-item legend-3v3"><div class="legend-ring"></div><span class="legend-label">3.3V Power</span></div>
+                    <div class="legend-item legend-gnd"><div class="legend-ring"></div><span class="legend-label">Ground</span></div>
+                    <div class="legend-item legend-gpio"><div class="legend-ring"></div><span class="legend-label">Configurable I/O</span></div>
+                    <div class="legend-item legend-reserved"><div class="legend-ring"></div><span class="legend-label">System Reserved</span></div>
                 </div>
             </div>
         </div>
@@ -88,7 +105,6 @@
         </div>
     </div>
 
-    <!-- Modular JS Loaders -->
     <script src="js/config.js"></script>
     <script src="js/network.js"></script>
     <script src="js/ui.js"></script>
