@@ -160,10 +160,28 @@ qint64 TelemetryServer::getOsUptime() {
     return 0;
 }
 
+float TelemetryServer::getCpuTemp() {
+    QFile file("/sys/class/thermal/thermal_zone0/temp");
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QString content = file.readAll().trimmed();
+        file.close();
+        bool ok;
+        float temp = content.toFloat(&ok);
+        if (ok) {
+            // Convert millidegrees to degrees Celsius
+            return temp / 1000.0f; 
+        }
+    }
+    return 0.0f; // Return 0 if the file fails to read
+}
+
 void TelemetryServer::broadcastHeartbeat() {
     QJsonObject payload;
     payload["os_uptime"] = getOsUptime();
     payload["daemon_uptime"] = m_uptimeTimer.elapsed() / 1000;
+    
+    // --- NEW: Append CPU Temp to the JSON payload ---
+    payload["cpu_temp"] = getCpuTemp();
 
     QJsonObject packet;
     packet["type"] = "HEARTBEAT";

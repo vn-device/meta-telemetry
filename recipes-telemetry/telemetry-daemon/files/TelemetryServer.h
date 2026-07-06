@@ -31,6 +31,9 @@ private:
     QElapsedTimer m_uptimeTimer;
     qint64 getOsUptime();
     
+    // System Telemetry
+    float getCpuTemp(); // <--- NEW: CPU Temp reader declaration
+    
     // Hardware interface (libgpiod v2)
     std::map<int, gpiod::line_request> m_activeLines;
 };
