@@ -29,6 +29,9 @@ function connectWebSocket() {
             if (data.cpu_temp !== undefined) {
                 document.getElementById('cpu-temp').textContent = data.cpu_temp.toFixed(1) + '°C';
             }
+            if (data.load_avg !== undefined) {
+                document.getElementById('load-avg').textContent = data.load_avg.toFixed(2);
+            }
         } 
         else if (packet.type === 'COMMAND_RESPONSE') {
             if (window.handleCommandResponse) {

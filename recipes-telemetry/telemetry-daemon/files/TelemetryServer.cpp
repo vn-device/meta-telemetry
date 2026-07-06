@@ -167,21 +167,38 @@ float TelemetryServer::getCpuTemp() {
         file.close();
         bool ok;
         float temp = content.toFloat(&ok);
+        
         if (ok) {
             // Convert millidegrees to degrees Celsius
             return temp / 1000.0f; 
         }
     }
+
     return 0.0f; // Return 0 if the file fails to read
+}
+
+float TelemetryServer::getLoadAvg() {
+    QFile file("/proc/loadavg");
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QString content = file.readAll();
+        file.close();
+
+        // /proc/loadavg format: "0.25 0.15 0.10 1/500 1234"
+        QStringList parts = content.split(" ");
+        if (!parts.isEmpty()) {
+            return parts[0].toFloat();
+        }
+    }
+
+    return 0.0f;
 }
 
 void TelemetryServer::broadcastHeartbeat() {
     QJsonObject payload;
     payload["os_uptime"] = getOsUptime();
     payload["daemon_uptime"] = m_uptimeTimer.elapsed() / 1000;
-    
-    // --- NEW: Append CPU Temp to the JSON payload ---
     payload["cpu_temp"] = getCpuTemp();
+    payload["load_avg"] = getLoadAvg();
 
     QJsonObject packet;
     packet["type"] = "HEARTBEAT";

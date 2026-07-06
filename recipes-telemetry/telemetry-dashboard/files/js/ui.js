@@ -83,7 +83,6 @@ window.openPinModal = function(pinId)
     document.getElementById('shared-modal-overlay').style.display = 'flex';
 };
 
-
 // --- Metric Drill-Down Logic ---
 
 let drillDownChart = null;
@@ -173,6 +172,30 @@ function initDrillDownChart(metricType) {
         }, 1000);
     }
 }
+
+window.openInfoModal = function(type) {
+    const title = document.getElementById('modal-title');
+    const bodyContent = document.getElementById('modal-body-content');
+    
+    document.getElementById('modal-card-container').style.maxWidth = '420px';
+
+    if (type === 'load') {
+        title.textContent = "What is Load Average?";
+        bodyContent.innerHTML = `
+            <p class="modal-desc">
+                Load Average represents the number of processes currently using or waiting for CPU time. 
+                <br><br>
+                <strong>0.00</strong> = Idle system. 
+                <br>
+                <strong>4.00</strong> = Full capacity (for 4-core CPU). 
+                <br><br>
+                Values above 4.00 indicate a backlog, meaning the system may feel sluggish.
+            </p>
+        `;
+    }
+
+    document.getElementById('shared-modal-overlay').style.display = 'flex';
+};
 
 window.closeModal = function() {
     document.getElementById('shared-modal-overlay').style.display = 'none';
@@ -270,114 +293,6 @@ function switchTab(tabId)
         const btn = document.querySelector(`button[onclick="switchTab('${tabId}')"]`);
         if (btn) btn.classList.add('active');
     }
-}
-
-// --- Chart.js & Advanced View Logic ---
-let telemetryChart = null;
-let mockDataInterval = null;
-
-function toggleAdvancedView(isAdvanced) {
-    const container = document.getElementById('advanced-graph-container');
-    if (isAdvanced) {
-        container.classList.remove('hidden');
-        if (!telemetryChart) initChart();
-        
-        // Start mock data for UI preview purposes
-        if (!mockDataInterval) {
-            mockDataInterval = setInterval(feedMockData, 1000);
-        }
-    } else {
-        container.classList.add('hidden');
-        if (mockDataInterval) {
-            clearInterval(mockDataInterval);
-            mockDataInterval = null;
-        }
-    }
-}
-
-function initChart() {
-    const ctx = document.getElementById('telemetryChart').getContext('2d');
-    
-    Chart.defaults.color = '#a0a0a0';
-    Chart.defaults.font.family = 'system-ui, -apple-system, sans-serif';
-
-    telemetryChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: Array(60).fill(''), // 60 seconds rolling window
-            datasets: [
-                {
-                    label: 'CPU Temp (°C)',
-                    borderColor: '#e57373', // Matches power5v red
-                    backgroundColor: 'rgba(229, 115, 115, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHitRadius: 10,
-                    tension: 0.4,
-                    yAxisID: 'y',
-                    data: Array(60).fill(null)
-                },
-                {
-                    label: 'RAM Usage (%)',
-                    borderColor: '#bb86fc', // Matches accent purple
-                    backgroundColor: 'rgba(187, 134, 252, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHitRadius: 10,
-                    tension: 0.4,
-                    yAxisID: 'y1',
-                    data: Array(60).fill(null)
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
-                tooltip: { backgroundColor: '#1e1e1e', titleColor: '#e0e0e0', bodyColor: '#e0e0e0', borderColor: '#333', borderWidth: 1 }
-            },
-            scales: {
-                x: { display: false, grid: { display: false } },
-                y: { 
-                    type: 'linear', display: true, position: 'left',
-                    title: { display: true, text: 'Temp (°C)' },
-                    min: 30, max: 90,
-                    grid: { color: '#333' }
-                },
-                y1: {
-                    type: 'linear', display: true, position: 'right',
-                    title: { display: true, text: 'RAM (%)' },
-                    min: 0, max: 100,
-                    grid: { drawOnChartArea: false }, // Prevent overlapping grid lines
-                }
-            }
-        }
-    });
-}
-
-// Temporary function to preview graph animation
-function feedMockData() {
-    if (!telemetryChart) return;
-    
-    const datasets = telemetryChart.data.datasets;
-    const lastTemp = datasets[0].data[59] || 45;
-    const lastRam = datasets[1].data[59] || 25;
-    
-    // Generate realistic fluctuating data
-    const newTemp = Math.min(85, Math.max(35, lastTemp + (Math.random() * 2 - 1)));
-    const newRam = Math.min(100, Math.max(10, lastRam + (Math.random() * 4 - 2)));
-
-    // Shift data left and push new values
-    datasets[0].data.shift();
-    datasets[0].data.push(newTemp);
-    
-    datasets[1].data.shift();
-    datasets[1].data.push(newRam);
-    
-    // Update chart without resetting animation for smooth rolling
-    telemetryChart.update('none'); 
 }
 
 function toggleTheme(forceLight = null) {

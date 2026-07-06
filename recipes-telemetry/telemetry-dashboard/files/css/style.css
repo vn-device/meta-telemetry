@@ -1,3 +1,4 @@
+/* STREAMING_CHUNK:Defining color variables and theme defaults... */
 :root {
     --bg-base: #121212;
     --bg-surface: #1e1e1e;
@@ -34,6 +35,7 @@ body {
     justify-content: center;
 }
 
+/* STREAMING_CHUNK:Styling main layout containers and headers... */
 .dashboard-container {
     width: 100%;
     max-width: 800px;
@@ -79,6 +81,7 @@ body {
     background-color: var(--bg-surface-elevated);
 }
 
+/* STREAMING_CHUNK:Styling status badges and tab navigation... */
 .status-badge {
     padding: 6px 12px;
     border-radius: 20px;
@@ -132,6 +135,7 @@ body {
     display: block;
 }
 
+/* STREAMING_CHUNK:Styling metric cards and new info button... */
 .grid-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -172,6 +176,29 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+.info-btn {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.info-btn:hover {
+    background-color: var(--accent);
+    color: var(--bg-base);
+    border-color: var(--accent);
+}
+
+/* STREAMING_CHUNK:Styling controls section and generic buttons... */
 .controls-section {
     background-color: var(--bg-surface);
     border: 1px solid var(--border);
@@ -225,6 +252,7 @@ body {
     transform: scale(0.98);
 }
 
+/* STREAMING_CHUNK:Styling GPIO pinout grid and pins... */
 .pinout-container {
     background-color: var(--bg-surface);
     border: 1px solid var(--border);
@@ -263,19 +291,34 @@ body {
     user-select: none;
 }
 
-.pin.power3v3, .pin.power5v, .pin.gnd {
+.pin.power3v3,
+.pin.power5v,
+.pin.gnd {
     cursor: not-allowed;
     opacity: 0.8;
 }
-.pin.power3v3 { border-color: var(--pin-3v3); color: var(--pin-3v3); }
-.pin.power5v { border-color: var(--pin-5v); color: var(--pin-5v); }
-.pin.gnd { border-color: var(--pin-gnd); color: var(--pin-gnd); }
+
+.pin.power3v3 {
+    border-color: var(--pin-3v3);
+    color: var(--pin-3v3);
+}
+
+.pin.power5v {
+    border-color: var(--pin-5v);
+    color: var(--pin-5v);
+}
+
+.pin.gnd {
+    border-color: var(--pin-gnd);
+    color: var(--pin-gnd);
+}
 
 .pin.gpio {
     border-color: var(--pin-gpio);
     color: var(--pin-gpio);
     cursor: pointer;
 }
+
 .pin.gpio:hover {
     transform: scale(1.15);
     box-shadow: 0 0 8px rgba(129, 199, 132, 0.4);
@@ -285,13 +328,11 @@ body {
     border-color: var(--accent);
     color: var(--accent);
     cursor: not-allowed;
-    background: repeating-linear-gradient(
-        45deg,
-        rgba(187, 134, 252, 0.1),
-        rgba(187, 134, 252, 0.1) 4px,
-        transparent 4px,
-        transparent 8px
-    );
+    background: repeating-linear-gradient(45deg,
+            rgba(187, 134, 252, 0.1),
+            rgba(187, 134, 252, 0.1) 4px,
+            transparent 4px,
+            transparent 8px);
 }
 
 .pin.highlight {
@@ -300,6 +341,7 @@ body {
     box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
 }
 
+/* STREAMING_CHUNK:Styling GPIO legend... */
 .legend-container {
     display: flex;
     justify-content: center;
@@ -333,26 +375,50 @@ body {
     opacity: 0.6;
 }
 
-.legend-5v .legend-ring, .legend-5v .legend-label { border-color: var(--pin-5v); color: var(--pin-5v); }
-.legend-3v3 .legend-ring, .legend-3v3 .legend-label { border-color: var(--pin-3v3); color: var(--pin-3v3); }
-.legend-gnd .legend-ring, .legend-gnd .legend-label { border-color: var(--pin-gnd); color: var(--pin-gnd); }
-.legend-gpio .legend-ring, .legend-gpio .legend-label { border-color: var(--pin-gpio); color: var(--pin-gpio); }
-
-.legend-reserved .legend-ring { 
-    border-color: var(--accent); 
-    background: repeating-linear-gradient(
-        45deg,
-        rgba(187, 134, 252, 0.4),
-        rgba(187, 134, 252, 0.4) 2px,
-        transparent 2px,
-        transparent 4px
-    ); 
+.legend-5v .legend-ring,
+.legend-5v .legend-label {
+    border-color: var(--pin-5v);
+    color: var(--pin-5v);
 }
-.legend-reserved .legend-label { color: var(--accent); }
 
+.legend-3v3 .legend-ring,
+.legend-3v3 .legend-label {
+    border-color: var(--pin-3v3);
+    color: var(--pin-3v3);
+}
+
+.legend-gnd .legend-ring,
+.legend-gnd .legend-label {
+    border-color: var(--pin-gnd);
+    color: var(--pin-gnd);
+}
+
+.legend-gpio .legend-ring,
+.legend-gpio .legend-label {
+    border-color: var(--pin-gpio);
+    color: var(--pin-gpio);
+}
+
+.legend-reserved .legend-ring {
+    border-color: var(--accent);
+    background: repeating-linear-gradient(45deg,
+            rgba(187, 134, 252, 0.4),
+            rgba(187, 134, 252, 0.4) 2px,
+            transparent 2px,
+            transparent 4px);
+}
+
+.legend-reserved .legend-label {
+    color: var(--accent);
+}
+
+/* STREAMING_CHUNK:Styling modal overlay and popup cards... */
 .modal-overlay {
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background-color: rgba(0, 0, 0, 0.75);
     display: none;
     justify-content: center;
@@ -379,28 +445,31 @@ body {
     padding-bottom: 12px;
 }
 
-.modal-header h3 { 
-    margin: 0; 
-    font-size: 18px; 
-    font-family: monospace; 
-    color: var(--accent); 
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-family: monospace;
+    color: var(--accent);
 }
 
-.modal-close { 
-    background: none; 
-    border: none; 
-    color: var(--text-secondary); 
-    font-size: 24px; 
-    cursor: pointer; 
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
     line-height: 1;
 }
-.modal-close:hover { color: var(--danger); }
 
-.modal-desc { 
-    font-size: 14px; 
-    color: var(--text-secondary); 
-    line-height: 1.5; 
-    margin-bottom: 24px; 
+.modal-close:hover {
+    color: var(--danger);
+}
+
+.modal-desc {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 24px;
 }
 
 .read-only-badge {
@@ -415,6 +484,7 @@ body {
     letter-spacing: 0.05em;
 }
 
+/* STREAMING_CHUNK:Styling modal interactive controls and switches... */
 .control-group {
     display: flex;
     justify-content: space-between;
@@ -426,7 +496,10 @@ body {
     border: 1px solid var(--border);
 }
 
-.control-group label { font-size: 14px; font-weight: 500; }
+.control-group label {
+    font-size: 14px;
+    font-weight: 500;
+}
 
 .segmented-control {
     display: flex;
@@ -435,36 +508,81 @@ body {
     overflow: hidden;
     border: 1px solid var(--border);
 }
+
 .segmented-control button {
-    background: none; border: none; color: var(--text-secondary);
-    padding: 6px 16px; font-size: 12px; font-weight: bold; cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
     transition: background 0.1s;
 }
-.segmented-control button.active { 
-    background-color: var(--accent); 
-    color: #000; 
+
+.segmented-control button.active {
+    background-color: var(--accent);
+    color: #000;
 }
 
-.switch { position: relative; display: inline-block; width: 44px; height: 24px; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider { 
-    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; 
-    background-color: var(--bg-surface-elevated); transition: .2s; border-radius: 24px; 
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-surface-elevated);
+    transition: .2s;
+    border-radius: 24px;
     border: 1px solid var(--border);
 }
-.slider:before { 
-    position: absolute; content: ""; height: 16px; width: 16px; 
-    left: 3px; bottom: 3px; background-color: var(--text-secondary); 
-    transition: .2s; border-radius: 50%; 
-}
-input:checked + .slider { background-color: rgba(129, 199, 132, 0.2); border-color: var(--pin-gpio); }
-input:checked + .slider:before { transform: translateX(20px); background-color: var(--pin-gpio); }
 
-.state-label { 
-    font-family: monospace; font-size: 13px; font-weight: bold; 
-    min-width: 90px; text-align: right; color: var(--text-primary);
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--text-secondary);
+    transition: .2s;
+    border-radius: 50%;
 }
 
+input:checked+.slider {
+    background-color: rgba(129, 199, 132, 0.2);
+    border-color: var(--pin-gpio);
+}
+
+input:checked+.slider:before {
+    transform: translateX(20px);
+    background-color: var(--pin-gpio);
+}
+
+.state-label {
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: bold;
+    min-width: 90px;
+    text-align: right;
+    color: var(--text-primary);
+}
+
+/* STREAMING_CHUNK:Styling footer and graph containers... */
 .footer {
     text-align: center;
     margin-top: 10px;

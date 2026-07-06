@@ -58,13 +58,15 @@
             <!-- System Diagnostics Group -->
             <div class="controls-header">System Diagnostics</div>
             <div class="grid-cards" style="margin-bottom: 20px;">
-                <!-- Added hover-clickable class and onclick handler -->
                 <div class="card hover-clickable" onclick="openMetricModal('cpu')">
                     <span class="card-label">CPU Temp (Inspect)</span>
                     <span id="cpu-temp" class="card-value">--°C</span>
                 </div>
                 <div class="card">
-                    <span class="card-label">Load Average</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="card-label">Load Average</span>
+                        <button class="info-btn" onclick="openInfoModal('load')" title="What is Load Average?">?</button>
+                    </div>
                     <span id="load-avg" class="card-value">--</span>
                 </div>
             </div>
@@ -72,7 +74,6 @@
             <!-- System Health Group -->
             <div class="controls-header">System Health</div>
             <div class="grid-cards">
-                <!-- Added hover-clickable class and onclick handler -->
                 <div class="card hover-clickable" onclick="openMetricModal('ram')">
                     <span class="card-label">RAM Usage (Inspect)</span>
                     <span id="ram-usage" class="card-value">--%</span>
