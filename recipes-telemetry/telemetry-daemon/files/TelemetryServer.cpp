@@ -8,9 +8,13 @@
 #include <utility>
 #include <gpiod.hpp>
 #include <map>
+#include <fstream>
+#include <string>
+#include <iostream>
 
 // Translates physical header pins (1-40) to internal RP1 SoC line offsets
-static int getBcmFromPhysical(int physicalPin) {
+static int getBcmFromPhysical(int physicalPin) 
+{
     static const std::map<int, int> pinMap = {
         {3, 2}, {5, 3}, {7, 4}, {8, 14}, {10, 15}, {11, 17},
         {12, 18}, {13, 27}, {15, 22}, {16, 23}, {18, 24},
@@ -29,7 +33,8 @@ TelemetryServer::TelemetryServer(quint16 port, QObject *parent) :
 {
     m_uptimeTimer.start();
 
-    if (m_pWebSocketServer->listen(QHostAddress::Any, port)) {
+    if (m_pWebSocketServer->listen(QHostAddress::Any, port)) 
+    {
         qDebug() << "Telemetry Server up and listening on port" << port;
         
         connect(m_pWebSocketServer, &QWebSocketServer::newConnection,
@@ -41,12 +46,14 @@ TelemetryServer::TelemetryServer(quint16 port, QObject *parent) :
     }
 }
 
-TelemetryServer::~TelemetryServer() {
+TelemetryServer::~TelemetryServer() 
+{
     m_pWebSocketServer->close();
     qDeleteAll(m_clients.begin(), m_clients.end());
 }
 
-void TelemetryServer::onNewConnection() {
+void TelemetryServer::onNewConnection() 
+{
     QWebSocket *pSocket = m_pWebSocketServer->nextPendingConnection();
     connect(pSocket, &QWebSocket::textMessageReceived, this, &TelemetryServer::processTextMessage);
     connect(pSocket, &QWebSocket::disconnected, this, &TelemetryServer::socketDisconnected);
@@ -54,18 +61,26 @@ void TelemetryServer::onNewConnection() {
     qDebug() << "Client connected.";
 }
 
-void TelemetryServer::processTextMessage(const QString &message) {
+void TelemetryServer::processTextMessage(const QString &message) 
+{
     QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
-    if (!pClient) return;
+    if (!pClient) 
+    {
+        return;
+    }
 
     QJsonParseError error;
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &error);
     
-    if (error.error != QJsonParseError::NoError || !doc.isObject()) return;
+    if (error.error != QJsonParseError::NoError || !doc.isObject()) 
+    {
+        return;
+    }
 
     QJsonObject root = doc.object();
     
-    if (root["type"].toString() == "CLIENT_HELLO") {
+    if (root["type"].toString() == "CLIENT_HELLO") 
+    {
         QJsonObject response;
         response["type"] = "SYSTEM_READY";
         response["timestamp"] = QDateTime::currentMSecsSinceEpoch();
@@ -74,7 +89,8 @@ void TelemetryServer::processTextMessage(const QString &message) {
         return;
     }
     
-    if (root["type"].toString() == "WRITE_GPIO_REQUEST") {
+    if (root["type"].toString() == "WRITE_GPIO_REQUEST") 
+    {
         QJsonObject payload = root["payload"].toObject();
         int physicalPin = payload["pin"].toInt();
         int val = payload["val"].toInt();
@@ -83,13 +99,12 @@ void TelemetryServer::processTextMessage(const QString &message) {
         QJsonObject response;
         response["type"] = "COMMAND_RESPONSE";
         QJsonObject responsePayload;
-        // Keep the response mapped to the physical pin for the UI
         responsePayload["pin"] = physicalPin;
         
-        // Translate physical header pin to hardware offset
         int bcmPin = getBcmFromPhysical(physicalPin);
         
-        if (bcmPin == -1) {
+        if (bcmPin == -1) 
+        {
             responsePayload["status"] = "ERROR";
             responsePayload["message"] = "Invalid or non-configurable physical pin requested.";
             response["payload"] = responsePayload;
@@ -97,37 +112,40 @@ void TelemetryServer::processTextMessage(const QString &message) {
             return;
         }
         
-        try {
-            // Track the active lines using the physical pin as the map key
+        try 
+        {
             auto it = m_activeLines.find(physicalPin);
             
-            // If the line is already open, we MUST re-request it to change direction
-            if (it != m_activeLines.end()) {
+            if (it != m_activeLines.end()) 
+            {
                 m_activeLines.erase(it);
             }
             
             gpiod::chip chip("/dev/gpiochip0");
             gpiod::line_settings settings;
             
-            if (mode == "OUT") {
+            if (mode == "OUT") 
+            {
                 settings.set_direction(gpiod::line::direction::OUTPUT);
                 settings.set_output_value((val == 1) ? gpiod::line::value::ACTIVE : gpiod::line::value::INACTIVE);
-            } else {
+            } 
+            else 
+            {
                 settings.set_direction(gpiod::line::direction::INPUT);
             }
             
-            // CRITICAL: Request the BCM hardware line, NOT the physical header number
             auto req = chip.prepare_request()
                 .set_consumer("telemetry-daemon")
                 .add_line_settings(bcmPin, settings) 
                 .do_request();
                 
-            // Safely emplace it to avoid default constructor restrictions
             m_activeLines.emplace(physicalPin, std::move(req));
             
             qDebug() << "Hardware GPIO BCM:" << bcmPin << "(Physical:" << physicalPin << ") mode:" << mode << "val:" << val;
             responsePayload["status"] = "SUCCESS";
-        } catch (const std::exception& e) {
+        } 
+        catch (const std::exception& e) 
+        {
             qWarning() << "libgpiod error:" << e.what();
             responsePayload["status"] = "ERROR";
             responsePayload["message"] = QString("Hardware Lockout: ") + e.what();
@@ -138,54 +156,63 @@ void TelemetryServer::processTextMessage(const QString &message) {
     }
 }
 
-void TelemetryServer::socketDisconnected() {
+void TelemetryServer::socketDisconnected() 
+{
     QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
-    if (pClient) {
+    if (pClient) 
+    {
         m_clients.removeAll(pClient);
         pClient->deleteLater();
         qDebug() << "Client disconnected.";
     }
 }
 
-qint64 TelemetryServer::getOsUptime() {
+qint64 TelemetryServer::getOsUptime() 
+{
     QFile file("/proc/uptime");
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) 
+    {
         QString content = file.readAll();
         file.close();
         QStringList parts = content.split(" ");
-        if (!parts.isEmpty()) {
+        if (!parts.isEmpty()) 
+        {
             return parts[0].toDouble();
         }
     }
     return 0;
 }
 
-float TelemetryServer::getCpuTemp() {
+float TelemetryServer::getCpuTemp() 
+{
     QFile file("/sys/class/thermal/thermal_zone0/temp");
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) 
+    {
         QString content = file.readAll().trimmed();
         file.close();
         bool ok;
         float temp = content.toFloat(&ok);
         
-        if (ok) {
-            // Convert millidegrees to degrees Celsius
+        if (ok) 
+        {
             return temp / 1000.0f; 
         }
     }
 
-    return 0.0f; // Return 0 if the file fails to read
+    return 0.0f;
 }
 
-float TelemetryServer::getLoadAvg() {
+float TelemetryServer::getLoadAvg() 
+{
     QFile file("/proc/loadavg");
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) 
+    {
         QString content = file.readAll();
         file.close();
 
-        // /proc/loadavg format: "0.25 0.15 0.10 1/500 1234"
         QStringList parts = content.split(" ");
-        if (!parts.isEmpty()) {
+        if (!parts.isEmpty()) 
+        {
             return parts[0].toFloat();
         }
     }
@@ -193,12 +220,56 @@ float TelemetryServer::getLoadAvg() {
     return 0.0f;
 }
 
-void TelemetryServer::broadcastHeartbeat() {
+int TelemetryServer::getRamUsage()
+{
+    std::ifstream file("/proc/meminfo");
+    
+    if (!file.is_open())
+    {
+        std::cerr << "Error: Unable to open /proc/meminfo" << std::endl;
+        return -1;
+    }
+
+    std::string token;
+    long memTotal = 0;
+    long memAvailable = 0;
+
+    while (file >> token)
+    {
+        if (token == "MemTotal:")
+        {
+            file >> memTotal;
+        }
+        else if (token == "MemAvailable:")
+        {
+            file >> memAvailable;
+        }
+        
+        if (memTotal > 0 && memAvailable > 0)
+        {
+            break;
+        }
+    }
+
+    file.close();
+
+    if (memTotal > 0)
+    {
+        long usedMem = memTotal - memAvailable;
+        return static_cast<int>((usedMem * 100) / memTotal);
+    }
+
+    return -1;
+}
+
+void TelemetryServer::broadcastHeartbeat() 
+{
     QJsonObject payload;
     payload["os_uptime"] = getOsUptime();
     payload["daemon_uptime"] = m_uptimeTimer.elapsed() / 1000;
     payload["cpu_temp"] = getCpuTemp();
     payload["load_avg"] = getLoadAvg();
+    payload["ram_usage"] = getRamUsage(); // Correctly bound to the outgoing packet
 
     QJsonObject packet;
     packet["type"] = "HEARTBEAT";
@@ -206,7 +277,8 @@ void TelemetryServer::broadcastHeartbeat() {
     packet["payload"] = payload;
 
     QString msg = QJsonDocument(packet).toJson(QJsonDocument::Compact);
-    for (QWebSocket *client : std::as_const(m_clients)) {
+    for (QWebSocket *client : std::as_const(m_clients)) 
+    {
         client->sendTextMessage(msg);
     }
 }

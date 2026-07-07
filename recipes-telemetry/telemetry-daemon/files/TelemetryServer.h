@@ -34,6 +34,7 @@ private:
     // System Telemetry
     float getCpuTemp();
     float getLoadAvg();
+    int getRamUsage();
     
     // Hardware interface (libgpiod v2)
     std::map<int, gpiod::line_request> m_activeLines;
