@@ -1,68 +1,110 @@
 let ws;
-let lastHeartbeat = Date.now();
-let sentinelTimer = null;
+let lastHeartbeat = 0;
+let sentinelTimer;
 
-function connectWebSocket() 
+function connectWebSocket()
 {
     ws = new WebSocket(`ws://${window.location.hostname}:8080`);
 
-    ws.onopen = () => 
+    ws.onopen = () =>
     {
         const status = document.getElementById('conn-status');
         status.textContent = 'Connected';
         status.classList.add('connected');
+        
+        const helloPacket = 
+        { 
+            type: 'CLIENT_HELLO', 
+            timestamp: Date.now(), 
+            payload: 
+            {
+            } 
+        };
+        
+        ws.send(JSON.stringify(helloPacket));
+
+        lastHeartbeat = Date.now();
         startSentinel();
     };
 
-    ws.onmessage = (event) => 
+    ws.onmessage = (event) =>
     {
-        const packet = JSON.parse(event.data);
-        
-        if (packet.type === 'HEARTBEAT') 
+        try
         {
-            lastHeartbeat = Date.now();
-            const payload = packet.payload;
+            const data = JSON.parse(event.data);
             
-            if (payload.os_uptime !== undefined) 
+            switch(data.type)
             {
-                document.getElementById('os-runtime').textContent = payload.os_uptime + 's';
-            }
-            if (payload.daemon_uptime !== undefined) 
-            {
-                document.getElementById('app-runtime').textContent = payload.daemon_uptime + 's';
-            }
-            if (payload.cpu_temp !== undefined) 
-            {
-                document.getElementById('cpu-temp').textContent = payload.cpu_temp.toFixed(1) + '°C';
-            }
-            if (payload.load_avg !== undefined) 
-            {
-                document.getElementById('load-avg').textContent = payload.load_avg.toFixed(2);
-            }
-            if (payload.ram_usage !== undefined) 
-            {
-                document.getElementById('ram-usage').textContent = payload.ram_usage + '%';
-            }
-
-            // Route live telemetry data to the chart workspace if the modal is currently open
-            if (window.activeMetricType && window.updateActiveChart) 
-            {
-                if (window.activeMetricType === 'cpu' && payload.cpu_temp !== undefined) 
+                case 'HEARTBEAT':
                 {
-                    window.updateActiveChart(payload.cpu_temp);
+                    lastHeartbeat = Date.now();
+                    if (data.payload) 
+                    {
+                        if (data.payload.os_uptime !== undefined) 
+                        {
+                            document.getElementById('os-runtime').textContent = data.payload.os_uptime + 's';
+                        }
+                        if (data.payload.daemon_uptime !== undefined) 
+                        {
+                            document.getElementById('app-runtime').textContent = data.payload.daemon_uptime + 's';
+                        }
+                        
+                        // Parse Under-Voltage hardware flag to toggle optimistic UI warning
+                        const warnIcon = document.getElementById('power-warning-icon');
+                        if (warnIcon)
+                        {
+                            if (data.payload.power_warn === true) 
+                            {
+                                warnIcon.classList.add('visible');
+                            } 
+                            else 
+                            {
+                                warnIcon.classList.remove('visible');
+                            }
+                        }
+                    }
+                    break;
                 }
-                else if (window.activeMetricType === 'ram' && payload.ram_usage !== undefined) 
+                case 'SYSTEM_STATE_REPORT':
                 {
-                    window.updateActiveChart(payload.ram_usage);
+                    if (data.payload && data.payload.pins)
+                    {
+                         Object.assign(frontendGpioState, data.payload.pins);
+                         
+                         const openPinTitle = document.getElementById('modal-title').textContent;
+                         if (document.getElementById('pin-modal-overlay').style.display === 'flex' && openPinTitle.includes('Pin'))
+                         {
+                             const pinIdStr = openPinTitle.split(' ')[1].replace(':', '');
+                             const pinId = parseInt(pinIdStr, 10);
+                             if (!isNaN(pinId)) 
+                             {
+                                 if (typeof window.openPinModal === 'function') 
+                                 {
+                                     window.openPinModal(pinId);
+                                 }
+                             }
+                         }
+                    }
+                    break;
+                }
+                case 'COMMAND_RESPONSE':
+                {
+                    if (typeof window.handleCommandResponse === 'function') 
+                    {
+                        window.handleCommandResponse(data.payload);
+                    }
+                    break;
+                }
+                default:
+                {
+                    console.warn("Unknown packet type received:", data.type);
+                    break;
                 }
             }
-        } 
-        else if (packet.type === 'COMMAND_RESPONSE') 
+        }
+        catch (e) 
         {
-            if (window.handleCommandResponse) 
-            {
-                window.handleCommandResponse(packet.payload);
-            }
+            console.error("Failed to parse incoming WS frame:", e);
         }
     };
 
@@ -78,20 +120,7 @@ function connectWebSocket()
     };
 }
 
-function handleDisconnect() 
-{
-    const status = document.getElementById('conn-status');
-    status.textContent = 'Disconnected';
-    status.classList.remove('connected');
-    
-    document.getElementById('os-runtime').textContent = '--s';
-    document.getElementById('app-runtime').textContent = '--s';
-    document.getElementById('cpu-temp').textContent = '--°C';
-    document.getElementById('load-avg').textContent = '--';
-    document.getElementById('ram-usage').textContent = '--%';
-}
-
-function startSentinel() 
+function startSentinel()
 {
     if (sentinelTimer) 
     {
@@ -111,4 +140,19 @@ function startSentinel()
             }
         }
     }, 1000);
+}
+
+function handleDisconnect()
+{
+    const status = document.getElementById('conn-status');
+    status.textContent = 'Disconnected';
+    status.classList.remove('connected');
+    
+    document.getElementById('os-runtime').textContent = '0s';
+    document.getElementById('app-runtime').textContent = '0s';
+    
+    if (sentinelTimer) 
+    {
+        clearInterval(sentinelTimer);
+    }
 }

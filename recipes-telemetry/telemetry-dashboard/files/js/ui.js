@@ -1,8 +1,3 @@
-// Global scope track parameters for mapping socket packets to the view
-window.activeMetricType = null;
-
-let drillDownChart = null;
-
 function renderPinout()
 {
     const grid = document.getElementById('pin-grid');
@@ -26,7 +21,10 @@ function renderPinout()
             
             pinDiv.textContent = pinData.pin;
             pinDiv.title = `Pin ${pinData.pin}: ${pinData.name}`;
-            pinDiv.onclick = () => window.openPinModal(pinData.pin);
+            pinDiv.onclick = () => 
+            {
+                window.openPinModal(pinData.pin);
+            };
             
             grid.appendChild(pinDiv);
         });
@@ -48,6 +46,7 @@ window.openPinModal = function(pinId)
     const bodyContent = document.getElementById('modal-body-content');
     
     document.getElementById('modal-card-container').style.maxWidth = '420px';
+
     title.textContent = `Pin ${pinData.pin}: ${pinData.name}`;
 
     let htmlBuilder = `<p class="modal-desc">`;
@@ -79,8 +78,13 @@ window.openPinModal = function(pinId)
         
         if (!frontendGpioState[pinId]) 
         {
-            frontendGpioState[pinId] = { mode: 'IN', val: 0 };
+            frontendGpioState[pinId] = 
+            { 
+                mode: 'IN', 
+                val: 0 
+            };
         }
+        
         const state = frontendGpioState[pinId];
 
         htmlBuilder += `
@@ -108,13 +112,35 @@ window.openPinModal = function(pinId)
     document.getElementById('shared-modal-overlay').style.display = 'flex';
 };
 
+window.openPowerWarningModal = function() 
+{
+    const title = document.getElementById('modal-title');
+    const bodyContent = document.getElementById('modal-body-content');
+    
+    document.getElementById('modal-card-container').style.maxWidth = '420px';
+    title.textContent = "Hardware Power Warning";
+    
+    // Warn user of potential system instability based on physical voltage limits
+    bodyContent.innerHTML = `
+        <p class="modal-desc">
+            <strong>Under-Voltage Detected:</strong> Your Raspberry Pi 5 is receiving insufficient power.
+            <br><br>
+            System performance may be throttled to maintain stability. Ensure you are using an official 5V/5A power supply and a high-quality USB-C cable to prevent kernel panics and data corruption.
+        </p>
+    `;
+    
+    document.getElementById('shared-modal-overlay').style.display = 'flex';
+};
+
+let drillDownChart = null;
+let drillDownInterval = null;
+
 window.openMetricModal = function(metricType) 
 {
     const title = document.getElementById('modal-title');
     const bodyContent = document.getElementById('modal-body-content');
     
     document.getElementById('modal-card-container').style.maxWidth = '600px';
-    window.activeMetricType = metricType;
 
     if (metricType === 'cpu') 
     {
@@ -132,6 +158,7 @@ window.openMetricModal = function(metricType)
     `;
 
     document.getElementById('shared-modal-overlay').style.display = 'flex';
+    
     initDrillDownChart(metricType);
 };
 
@@ -146,91 +173,98 @@ function initDrillDownChart(metricType)
     Chart.defaults.color = textColor;
     Chart.defaults.font.family = 'system-ui, -apple-system, sans-serif';
 
-    let config = {
+    let config = 
+    {
         type: 'line',
-        data: {
+        data: 
+        {
             labels: Array(60).fill(''),
-            datasets: [{
-                label: metricType === 'cpu' ? 'Temp (°C)' : 'Usage (%)',
-                borderColor: metricType === 'cpu' ? '#e57373' : '#bb86fc',
-                backgroundColor: metricType === 'cpu' ? 'rgba(229, 115, 115, 0.1)' : 'rgba(187, 134, 252, 0.1)',
-                borderWidth: 2,
-                pointRadius: 0,
-                pointHitRadius: 10,
-                tension: 0.4,
-                data: Array(60).fill(null)
-            }]
+            datasets: 
+            [
+                {
+                    label: metricType === 'cpu' ? 'Temp (°C)' : 'Usage (%)',
+                    borderColor: metricType === 'cpu' ? '#e57373' : '#bb86fc',
+                    backgroundColor: metricType === 'cpu' ? 'rgba(229, 115, 115, 0.1)' : 'rgba(187, 134, 252, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 10,
+                    tension: 0.4,
+                    data: Array(60).fill(null)
+                }
+            ]
         },
-        options: {
+        options: 
+        {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: { intersect: false, mode: 'index' }
+            plugins: 
+            {
+                legend: 
+                { 
+                    display: false 
+                },
+                tooltip: 
+                { 
+                    intersect: false, 
+                    mode: 'index' 
+                }
             },
-            scales: {
-                x: { display: false },
-                y: {
-                    type: 'linear', display: true, position: 'left',
+            scales: 
+            {
+                x: 
+                { 
+                    display: false 
+                },
+                y: 
+                {
+                    type: 'linear', 
+                    display: true, 
+                    position: 'left',
                     min: metricType === 'cpu' ? 30 : 0, 
                     max: metricType === 'cpu' ? 90 : 100,
-                    grid: { color: gridColor }
+                    grid: 
+                    { 
+                        color: gridColor 
+                    }
                 }
             }
         }
     };
 
     drillDownChart = new Chart(ctx, config);
-}
-
-// Global invocation hook for your socket pipeline to pipe deterministic physical measurements
-window.updateActiveChart = function(value)
-{
-    if (!drillDownChart) 
-    {
-        return;
-    }
-    const ds = drillDownChart.data.datasets[0];
-    ds.data.shift();
-    ds.data.push(value);
-    drillDownChart.update('none');
-};
-
-window.openInfoModal = function(type) 
-{
-    const title = document.getElementById('modal-title');
-    const bodyContent = document.getElementById('modal-body-content');
     
-    document.getElementById('modal-card-container').style.maxWidth = '420px';
-
-    if (type === 'load') 
+    if (!drillDownInterval) 
     {
-        title.textContent = "What is Load Average?";
-        bodyContent.innerHTML = `
-            <p class="modal-desc">
-                Load Average represents the number of processes currently using or waiting for CPU time. 
-                <br><br>
-                <strong>0.00</strong> = Idle system. 
-                <br>
-                <strong>4.00</strong> = Full capacity (for 4-core CPU). 
-                <br><br>
-                Values above 4.00 indicate a backlog, meaning the system may feel sluggish.
-            </p>
-        `;
+        drillDownInterval = setInterval(() => 
+        {
+            if (!drillDownChart) 
+            {
+                return;
+            }
+            const ds = drillDownChart.data.datasets[0];
+            const lastVal = ds.data[59] || (metricType === 'cpu' ? 45 : 25);
+            const newVal = Math.min(config.options.scales.y.max, Math.max(config.options.scales.y.min, lastVal + (Math.random() * 2 - 1)));
+            ds.data.shift();
+            ds.data.push(newVal);
+            drillDownChart.update('none');
+        }, 1000);
     }
-
-    document.getElementById('shared-modal-overlay').style.display = 'flex';
-};
+}
 
 window.closeModal = function() 
 {
     document.getElementById('shared-modal-overlay').style.display = 'none';
-    window.activeMetricType = null;
     
     if (drillDownChart) 
     {
         drillDownChart.destroy();
         drillDownChart = null;
+    }
+    
+    if (drillDownInterval) 
+    {
+        clearInterval(drillDownInterval);
+        drillDownInterval = null;
     }
 };
 
@@ -247,7 +281,7 @@ function sendGpioCommand(pinId, mode, val)
     if (!ws || ws.readyState !== WebSocket.OPEN) 
     {
         console.error("Cannot execute command: Backend daemon is currently disconnected.");
-        window.openPinModal(pinId); 
+        window.openPinModal(pinId);
         return;
     }
 
@@ -258,17 +292,24 @@ function sendGpioCommand(pinId, mode, val)
         controls.style.pointerEvents = 'none';
     }
     
-    frontendGpioState[pinId] = { mode: mode, val: val };
+    frontendGpioState[pinId] = 
+    { 
+        mode: mode, 
+        val: val 
+    };
 
-    const commandFrame = {
+    const commandFrame = 
+    {
         type: 'WRITE_GPIO_REQUEST',
         timestamp: Date.now(),
-        payload: {
+        payload: 
+        {
             pin: pinId,
             mode: mode,
             val: val
         }
     };
+    
     ws.send(JSON.stringify(commandFrame));
 }
 
@@ -309,6 +350,7 @@ function switchTab(tabId)
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     
     document.getElementById(`tab-${tabId}`).classList.add('active');
+    
     if (window.event && window.event.currentTarget) 
     {
         window.event.currentTarget.classList.add('active');
@@ -321,6 +363,176 @@ function switchTab(tabId)
             btn.classList.add('active');
         }
     }
+}
+
+let telemetryChart = null;
+let mockDataInterval = null;
+
+function toggleAdvancedView(isAdvanced) 
+{
+    const container = document.getElementById('advanced-graph-container');
+    if (isAdvanced) 
+    {
+        container.classList.remove('hidden');
+        if (!telemetryChart) 
+        {
+            initChart();
+        }
+        
+        if (!mockDataInterval) 
+        {
+            mockDataInterval = setInterval(feedMockData, 1000);
+        }
+    } 
+    else 
+    {
+        container.classList.add('hidden');
+        if (mockDataInterval) 
+        {
+            clearInterval(mockDataInterval);
+            mockDataInterval = null;
+        }
+    }
+}
+
+function initChart() 
+{
+    const ctx = document.getElementById('telemetryChart').getContext('2d');
+    
+    Chart.defaults.color = '#a0a0a0';
+    Chart.defaults.font.family = 'system-ui, -apple-system, sans-serif';
+
+    telemetryChart = new Chart(ctx, 
+    {
+        type: 'line',
+        data: 
+        {
+            labels: Array(60).fill(''), 
+            datasets: 
+            [
+                {
+                    label: 'CPU Temp (°C)',
+                    borderColor: '#e57373', 
+                    backgroundColor: 'rgba(229, 115, 115, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 10,
+                    tension: 0.4,
+                    yAxisID: 'y',
+                    data: Array(60).fill(null)
+                },
+                {
+                    label: 'RAM Usage (%)',
+                    borderColor: '#bb86fc', 
+                    backgroundColor: 'rgba(187, 134, 252, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 10,
+                    tension: 0.4,
+                    yAxisID: 'y1',
+                    data: Array(60).fill(null)
+                }
+            ]
+        },
+        options: 
+        {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: 
+            { 
+                mode: 'index', 
+                intersect: false 
+            },
+            plugins: 
+            {
+                legend: 
+                { 
+                    position: 'top', 
+                    labels: 
+                    { 
+                        usePointStyle: true, 
+                        boxWidth: 8 
+                    } 
+                },
+                tooltip: 
+                { 
+                    backgroundColor: '#1e1e1e', 
+                    titleColor: '#e0e0e0', 
+                    bodyColor: '#e0e0e0', 
+                    borderColor: '#333', 
+                    borderWidth: 1 
+                }
+            },
+            scales: 
+            {
+                x: 
+                { 
+                    display: false, 
+                    grid: 
+                    { 
+                        display: false 
+                    } 
+                },
+                y: 
+                { 
+                    type: 'linear', 
+                    display: true, 
+                    position: 'left',
+                    title: 
+                    { 
+                        display: true, 
+                        text: 'Temp (°C)' 
+                    },
+                    min: 30, 
+                    max: 90,
+                    grid: 
+                    { 
+                        color: '#333' 
+                    }
+                },
+                y1: 
+                {
+                    type: 'linear', 
+                    display: true, 
+                    position: 'right',
+                    title: 
+                    { 
+                        display: true, 
+                        text: 'RAM (%)' 
+                    },
+                    min: 0, 
+                    max: 100,
+                    grid: 
+                    { 
+                        drawOnChartArea: false 
+                    }
+                }
+            }
+        }
+    });
+}
+
+function feedMockData() 
+{
+    if (!telemetryChart) 
+    {
+        return;
+    }
+    
+    const datasets = telemetryChart.data.datasets;
+    const lastTemp = datasets[0].data[59] || 45;
+    const lastRam = datasets[1].data[59] || 25;
+    
+    const newTemp = Math.min(85, Math.max(35, lastTemp + (Math.random() * 2 - 1)));
+    const newRam = Math.min(100, Math.max(10, lastRam + (Math.random() * 4 - 2)));
+
+    datasets[0].data.shift();
+    datasets[0].data.push(newTemp);
+    
+    datasets[1].data.shift();
+    datasets[1].data.push(newRam);
+    
+    telemetryChart.update('none'); 
 }
 
 function toggleTheme(forceLight = null) 
@@ -340,6 +552,7 @@ function toggleTheme(forceLight = null)
         document.getElementById('theme-icon-sun').style.display = 'none';
         document.getElementById('theme-icon-moon').style.display = 'block';
     }
+    
     localStorage.setItem('theme', isLight ? 'light' : 'dark');
 
     if (drillDownChart) 

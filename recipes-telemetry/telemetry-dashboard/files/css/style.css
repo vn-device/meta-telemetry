@@ -1,5 +1,6 @@
 /* STREAMING_CHUNK:Defining color variables and theme defaults... */
-:root {
+:root 
+{
     --bg-base: #121212;
     --bg-surface: #1e1e1e;
     --bg-surface-elevated: #2d2d2d;
@@ -15,7 +16,8 @@
     --pin-gpio: #81c784;
 }
 
-:root.light-theme {
+:root.light-theme 
+{
     --bg-base: #f4f5f7;
     --bg-surface: #ffffff;
     --bg-surface-elevated: #e1e4e8;
@@ -25,7 +27,8 @@
     --border: #dadce0;
 }
 
-body {
+body 
+{
     background-color: var(--bg-base);
     color: var(--text-primary);
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -36,14 +39,16 @@ body {
 }
 
 /* STREAMING_CHUNK:Styling main layout containers and headers... */
-.dashboard-container {
+.dashboard-container 
+{
     width: 100%;
     max-width: 800px;
     display: grid;
     gap: 20px;
 }
 
-.header {
+.header 
+{
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -51,19 +56,22 @@ body {
     border-bottom: 1px solid var(--border);
 }
 
-.header h1 {
+.header h1 
+{
     margin: 0;
     font-size: 24px;
     font-weight: 600;
 }
 
-.header-controls {
+.header-controls 
+{
     display: flex;
     align-items: center;
     gap: 16px;
 }
 
-.icon-btn {
+.icon-btn 
+{
     background: none;
     border: none;
     color: var(--text-secondary);
@@ -76,13 +84,15 @@ body {
     transition: color 0.2s ease, background-color 0.2s ease;
 }
 
-.icon-btn:hover {
+.icon-btn:hover 
+{
     color: var(--text-primary);
     background-color: var(--bg-surface-elevated);
 }
 
 /* STREAMING_CHUNK:Styling status badges and tab navigation... */
-.status-badge {
+.status-badge 
+{
     padding: 6px 12px;
     border-radius: 20px;
     font-size: 14px;
@@ -93,20 +103,23 @@ body {
     transition: all 0.3s ease;
 }
 
-.status-badge.connected {
+.status-badge.connected 
+{
     background-color: rgba(3, 218, 198, 0.1);
     color: var(--success);
     border-color: var(--success);
 }
 
-.tabs {
+.tabs 
+{
     display: flex;
     gap: 10px;
     border-bottom: 1px solid var(--border);
     padding-bottom: 10px;
 }
 
-.tab-btn {
+.tab-btn 
+{
     background: none;
     border: none;
     color: var(--text-secondary);
@@ -118,32 +131,38 @@ body {
     transition: background 0.2s, color 0.2s;
 }
 
-.tab-btn:hover {
+.tab-btn:hover 
+{
     background-color: var(--bg-surface);
 }
 
-.tab-btn.active {
+.tab-btn.active 
+{
     background-color: rgba(187, 134, 252, 0.1);
     color: var(--accent);
 }
 
-.tab-content {
+.tab-content 
+{
     display: none;
 }
 
-.tab-content.active {
+.tab-content.active 
+{
     display: block;
 }
 
 /* STREAMING_CHUNK:Styling metric cards and new info button... */
-.grid-cards {
+.grid-cards 
+{
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
     margin-bottom: 20px;
 }
 
-.card {
+.card 
+{
     background-color: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -154,29 +173,34 @@ body {
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
-.card.hover-clickable {
+.card.hover-clickable 
+{
     cursor: pointer;
 }
 
-.card.hover-clickable:hover {
+.card.hover-clickable:hover 
+{
     transform: translateY(-2px);
     border-color: var(--accent);
 }
 
-.card-label {
+.card-label 
+{
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-secondary);
 }
 
-.card-value {
+.card-value 
+{
     font-size: 28px;
     font-weight: 300;
     font-variant-numeric: tabular-nums;
 }
 
-.info-btn {
+.info-btn 
+{
     background: var(--bg-surface-elevated);
     border: 1px solid var(--border);
     color: var(--text-secondary);
@@ -192,27 +216,31 @@ body {
     transition: all 0.2s ease;
 }
 
-.info-btn:hover {
+.info-btn:hover 
+{
     background-color: var(--accent);
     color: var(--bg-base);
     border-color: var(--accent);
 }
 
 /* STREAMING_CHUNK:Styling controls section and generic buttons... */
-.controls-section {
+.controls-section 
+{
     background-color: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 24px;
 }
 
-.controls-header {
+.controls-header 
+{
     font-size: 18px;
     margin-bottom: 16px;
     font-weight: 500;
 }
 
-.toggle-label {
+.toggle-label 
+{
     font-size: 14px;
     color: var(--text-secondary);
     font-weight: 600;
@@ -220,19 +248,22 @@ body {
     text-transform: uppercase;
 }
 
-.graph-container.hidden {
+.graph-container.hidden 
+{
     opacity: 0;
     max-height: 0;
     margin-top: 0;
     pointer-events: none;
 }
 
-.graph-card {
+.graph-card 
+{
     padding: 16px;
     height: 300px;
 }
 
-.btn {
+.btn 
+{
     background-color: var(--accent);
     color: #000;
     border: none;
@@ -244,28 +275,33 @@ body {
     transition: transform 0.1s ease, filter 0.2s ease;
 }
 
-.btn:hover {
+.btn:hover 
+{
     filter: brightness(1.1);
 }
 
-.btn:active {
+.btn:active 
+{
     transform: scale(0.98);
 }
 
 /* STREAMING_CHUNK:Styling GPIO pinout grid and pins... */
-.pinout-container {
+.pinout-container 
+{
     background-color: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 24px;
 }
 
-.pinout-wrapper {
+.pinout-wrapper 
+{
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
 
-.pin-grid {
+.pin-grid 
+{
     display: grid;
     grid-template-columns: repeat(20, minmax(28px, 1fr));
     grid-template-rows: repeat(2, auto);
@@ -275,7 +311,8 @@ body {
     padding: 12px;
 }
 
-.pin {
+.pin 
+{
     display: flex;
     align-items: center;
     justify-content: center;
@@ -293,38 +330,45 @@ body {
 
 .pin.power3v3,
 .pin.power5v,
-.pin.gnd {
+.pin.gnd 
+{
     cursor: not-allowed;
     opacity: 0.8;
 }
 
-.pin.power3v3 {
+.pin.power3v3 
+{
     border-color: var(--pin-3v3);
     color: var(--pin-3v3);
 }
 
-.pin.power5v {
+.pin.power5v 
+{
     border-color: var(--pin-5v);
     color: var(--pin-5v);
 }
 
-.pin.gnd {
+.pin.gnd 
+{
     border-color: var(--pin-gnd);
     color: var(--pin-gnd);
 }
 
-.pin.gpio {
+.pin.gpio 
+{
     border-color: var(--pin-gpio);
     color: var(--pin-gpio);
     cursor: pointer;
 }
 
-.pin.gpio:hover {
+.pin.gpio:hover 
+{
     transform: scale(1.15);
     box-shadow: 0 0 8px rgba(129, 199, 132, 0.4);
 }
 
-.pin.reserved {
+.pin.reserved 
+{
     border-color: var(--accent);
     color: var(--accent);
     cursor: not-allowed;
@@ -335,14 +379,16 @@ body {
             transparent 8px);
 }
 
-.pin.highlight {
+.pin.highlight 
+{
     border-color: var(--accent);
     color: var(--accent);
     box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
 }
 
 /* STREAMING_CHUNK:Styling GPIO legend... */
-.legend-container {
+.legend-container 
+{
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
@@ -352,13 +398,15 @@ body {
     border-top: 1px solid var(--border);
 }
 
-.legend-item {
+.legend-item 
+{
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.legend-ring {
+.legend-ring 
+{
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -367,7 +415,8 @@ body {
     box-sizing: border-box;
 }
 
-.legend-label {
+.legend-label 
+{
     font-family: monospace;
     font-size: 11px;
     letter-spacing: 0.05em;
@@ -376,30 +425,35 @@ body {
 }
 
 .legend-5v .legend-ring,
-.legend-5v .legend-label {
+.legend-5v .legend-label 
+{
     border-color: var(--pin-5v);
     color: var(--pin-5v);
 }
 
 .legend-3v3 .legend-ring,
-.legend-3v3 .legend-label {
+.legend-3v3 .legend-label 
+{
     border-color: var(--pin-3v3);
     color: var(--pin-3v3);
 }
 
 .legend-gnd .legend-ring,
-.legend-gnd .legend-label {
+.legend-gnd .legend-label 
+{
     border-color: var(--pin-gnd);
     color: var(--pin-gnd);
 }
 
 .legend-gpio .legend-ring,
-.legend-gpio .legend-label {
+.legend-gpio .legend-label 
+{
     border-color: var(--pin-gpio);
     color: var(--pin-gpio);
 }
 
-.legend-reserved .legend-ring {
+.legend-reserved .legend-ring 
+{
     border-color: var(--accent);
     background: repeating-linear-gradient(45deg,
             rgba(187, 134, 252, 0.4),
@@ -408,12 +462,14 @@ body {
             transparent 4px);
 }
 
-.legend-reserved .legend-label {
+.legend-reserved .legend-label 
+{
     color: var(--accent);
 }
 
 /* STREAMING_CHUNK:Styling modal overlay and popup cards... */
-.modal-overlay {
+.modal-overlay 
+{
     position: fixed;
     top: 0;
     left: 0;
@@ -426,7 +482,8 @@ body {
     z-index: 1000;
 }
 
-.modal-card {
+.modal-card 
+{
     background-color: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -436,7 +493,8 @@ body {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-.modal-header {
+.modal-header 
+{
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -445,14 +503,16 @@ body {
     padding-bottom: 12px;
 }
 
-.modal-header h3 {
+.modal-header h3 
+{
     margin: 0;
     font-size: 18px;
     font-family: monospace;
     color: var(--accent);
 }
 
-.modal-close {
+.modal-close 
+{
     background: none;
     border: none;
     color: var(--text-secondary);
@@ -461,18 +521,21 @@ body {
     line-height: 1;
 }
 
-.modal-close:hover {
+.modal-close:hover 
+{
     color: var(--danger);
 }
 
-.modal-desc {
+.modal-desc 
+{
     font-size: 14px;
     color: var(--text-secondary);
     line-height: 1.5;
     margin-bottom: 24px;
 }
 
-.read-only-badge {
+.read-only-badge 
+{
     background-color: rgba(117, 117, 117, 0.1);
     color: var(--pin-gnd);
     border: 1px dashed var(--pin-gnd);
@@ -485,7 +548,8 @@ body {
 }
 
 /* STREAMING_CHUNK:Styling modal interactive controls and switches... */
-.control-group {
+.control-group 
+{
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -496,12 +560,14 @@ body {
     border: 1px solid var(--border);
 }
 
-.control-group label {
+.control-group label 
+{
     font-size: 14px;
     font-weight: 500;
 }
 
-.segmented-control {
+.segmented-control 
+{
     display: flex;
     background-color: var(--bg-surface-elevated);
     border-radius: 6px;
@@ -509,7 +575,8 @@ body {
     border: 1px solid var(--border);
 }
 
-.segmented-control button {
+.segmented-control button 
+{
     background: none;
     border: none;
     color: var(--text-secondary);
@@ -520,25 +587,29 @@ body {
     transition: background 0.1s;
 }
 
-.segmented-control button.active {
+.segmented-control button.active 
+{
     background-color: var(--accent);
     color: #000;
 }
 
-.switch {
+.switch 
+{
     position: relative;
     display: inline-block;
     width: 44px;
     height: 24px;
 }
 
-.switch input {
+.switch input 
+{
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-.slider {
+.slider 
+{
     position: absolute;
     cursor: pointer;
     top: 0;
@@ -551,7 +622,8 @@ body {
     border: 1px solid var(--border);
 }
 
-.slider:before {
+.slider:before 
+{
     position: absolute;
     content: "";
     height: 16px;
@@ -563,17 +635,20 @@ body {
     border-radius: 50%;
 }
 
-input:checked+.slider {
+input:checked+.slider 
+{
     background-color: rgba(129, 199, 132, 0.2);
     border-color: var(--pin-gpio);
 }
 
-input:checked+.slider:before {
+input:checked+.slider:before 
+{
     transform: translateX(20px);
     background-color: var(--pin-gpio);
 }
 
-.state-label {
+.state-label 
+{
     font-family: monospace;
     font-size: 13px;
     font-weight: bold;
@@ -583,7 +658,8 @@ input:checked+.slider:before {
 }
 
 /* STREAMING_CHUNK:Styling footer and graph containers... */
-.footer {
+.footer 
+{
     text-align: center;
     margin-top: 10px;
     font-size: 12px;
@@ -591,8 +667,40 @@ input:checked+.slider:before {
     letter-spacing: 0.3px;
 }
 
-.modal-graph-container {
+.modal-graph-container 
+{
     height: 250px;
     width: 100%;
     position: relative;
+}
+
+/* STREAMING_CHUNK:Under-Voltage Warning Icon... */
+#power-warning-icon
+{
+    display: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: 15px;
+    background-color: rgba(255, 82, 82, 0.1);
+    border: 1px solid #ff5252;
+    border-radius: 4px;
+}
+
+#power-warning-icon.visible
+{
+    display: inline-block;
+    animation: blinkWarning 0.8s infinite alternate;
+}
+
+@keyframes blinkWarning
+{
+    from
+    {
+        opacity: 1.0;
+    }
+    to
+    {
+        opacity: 0.15;
+    }
 }
