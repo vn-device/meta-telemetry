@@ -11,11 +11,15 @@
 #include <fstream>
 #include <string>
 #include <iostream>
+#include <array>
+#include <memory>
+#include <stdexcept>
 
 // Translates physical header pins (1-40) to internal RP1 SoC line offsets
 static int getBcmFromPhysical(int physicalPin) 
 {
-    static const std::map<int, int> pinMap = {
+    static const std::map<int, int> pinMap = 
+    {
         {3, 2}, {5, 3}, {7, 4}, {8, 14}, {10, 15}, {11, 17},
         {12, 18}, {13, 27}, {15, 22}, {16, 23}, {18, 24},
         {19, 10}, {21, 9}, {22, 25}, {23, 11}, {24, 8},
@@ -262,6 +266,55 @@ int TelemetryServer::getRamUsage()
     return -1;
 }
 
+std::string TelemetryServer::executeCommand(const char* cmd)
+{
+    std::array<char, 128> buffer;
+    std::string result;
+    
+    // Leverage popen to fork a process and create a unidirectional pipe.
+    // Wrap the FILE pointer in a unique_ptr with a custom deleter (pclose) 
+    // to guarantee memory cleanup and prevent file descriptor leaks.
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    
+    if (!pipe)
+    {
+        throw std::runtime_error("Failed to allocate pipe for command execution.");
+    }
+    
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr)
+    {
+        result += buffer.data();
+    }
+    
+    return result;
+}
+
+bool TelemetryServer::getUnderVoltageStatus()
+{
+    try
+    {
+        // The Broadcom VideoCore GPU returns a bitfield formatted as "throttled=0xXXXXX"
+        std::string output = executeCommand("vcgencmd get_throttled");
+        
+        size_t pos = output.find("0x");
+        if (pos != std::string::npos)
+        {
+            std::string hexStr = output.substr(pos + 2);
+            uint32_t throttledState = std::stoul(hexStr, nullptr, 16);
+            
+            // Apply bitwise AND mask to extract specific hardware states:
+            // Bit 0 (0x00001): Under-voltage currently occurring.
+            return (throttledState & 0x01) != 0;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Exception during vcgencmd parse: " << e.what() << std::endl;
+    }
+    
+    return false;
+}
+
 void TelemetryServer::broadcastHeartbeat() 
 {
     QJsonObject payload;
@@ -269,7 +322,8 @@ void TelemetryServer::broadcastHeartbeat()
     payload["daemon_uptime"] = m_uptimeTimer.elapsed() / 1000;
     payload["cpu_temp"] = getCpuTemp();
     payload["load_avg"] = getLoadAvg();
-    payload["ram_usage"] = getRamUsage(); // Correctly bound to the outgoing packet
+    payload["ram_usage"] = getRamUsage();
+    payload["power_warn"] = getUnderVoltageStatus(); 
 
     QJsonObject packet;
     packet["type"] = "HEARTBEAT";

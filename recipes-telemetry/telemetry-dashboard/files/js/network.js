@@ -1,3 +1,4 @@
+// network.js
 let ws;
 let lastHeartbeat = 0;
 let sentinelTimer;
@@ -48,18 +49,38 @@ function connectWebSocket()
                         {
                             document.getElementById('app-runtime').textContent = data.payload.daemon_uptime + 's';
                         }
-                        
-                        // Parse Under-Voltage hardware flag to toggle optimistic UI warning
+
+                        if (data.payload.cpu_temp !== undefined)
+                        {
+                            document.getElementById('cpu-temp').textContent = data.payload.cpu_temp.toFixed(1) + '°C';
+                        }
+                        if (data.payload.load_avg !== undefined)
+                        {
+                            document.getElementById('load-avg').textContent = data.payload.load_avg.toFixed(2);
+                        }
+                        if (data.payload.ram_usage !== undefined)
+                        {
+                            document.getElementById('ram-usage').textContent = data.payload.ram_usage + '%';
+                        }
+
+                        if (typeof window.updateMetricChart === 'function')
+                        {
+                            window.updateMetricChart(data.payload);
+                        }
+
                         const warnIcon = document.getElementById('power-warning-icon');
-                        if (warnIcon)
+                        const uvText = document.getElementById('undervoltage');
+                        if (warnIcon && uvText)
                         {
                             if (data.payload.power_warn === true) 
                             {
                                 warnIcon.classList.add('visible');
+                                uvText.textContent = "ACTIVE";
                             } 
                             else 
                             {
                                 warnIcon.classList.remove('visible');
+                                uvText.textContent = "NORMAL";
                             }
                         }
                     }

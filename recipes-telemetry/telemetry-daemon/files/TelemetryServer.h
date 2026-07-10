@@ -9,8 +9,10 @@
 #include <QElapsedTimer>
 #include <gpiod.hpp> 
 #include <map>
+#include <string>
 
-class TelemetryServer : public QObject {
+class TelemetryServer : public QObject
+{
     Q_OBJECT
 public:
     explicit TelemetryServer(quint16 port, QObject *parent = nullptr);
@@ -35,6 +37,10 @@ private:
     float getCpuTemp();
     float getLoadAvg();
     int getRamUsage();
+    
+    // Hardware Diagnostics
+    bool getUnderVoltageStatus();
+    std::string executeCommand(const char* cmd);
     
     // Hardware interface (libgpiod v2)
     std::map<int, gpiod::line_request> m_activeLines;

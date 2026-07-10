@@ -1,3 +1,4 @@
+// ui.js
 function renderPinout()
 {
     const grid = document.getElementById('pin-grid');
@@ -120,7 +121,6 @@ window.openPowerWarningModal = function()
     document.getElementById('modal-card-container').style.maxWidth = '420px';
     title.textContent = "Hardware Power Warning";
     
-    // Warn user of potential system instability based on physical voltage limits
     bodyContent.innerHTML = `
         <p class="modal-desc">
             <strong>Under-Voltage Detected:</strong> Your Raspberry Pi 5 is receiving insufficient power.
@@ -133,7 +133,7 @@ window.openPowerWarningModal = function()
 };
 
 let drillDownChart = null;
-let drillDownInterval = null;
+let currentDrillDownMetric = null;
 
 window.openMetricModal = function(metricType) 
 {
@@ -141,6 +141,7 @@ window.openMetricModal = function(metricType)
     const bodyContent = document.getElementById('modal-body-content');
     
     document.getElementById('modal-card-container').style.maxWidth = '600px';
+    currentDrillDownMetric = metricType;
 
     if (metricType === 'cpu') 
     {
@@ -232,39 +233,33 @@ function initDrillDownChart(metricType)
     };
 
     drillDownChart = new Chart(ctx, config);
-    
-    if (!drillDownInterval) 
-    {
-        drillDownInterval = setInterval(() => 
-        {
-            if (!drillDownChart) 
-            {
-                return;
-            }
-            const ds = drillDownChart.data.datasets[0];
-            const lastVal = ds.data[59] || (metricType === 'cpu' ? 45 : 25);
-            const newVal = Math.min(config.options.scales.y.max, Math.max(config.options.scales.y.min, lastVal + (Math.random() * 2 - 1)));
-            ds.data.shift();
-            ds.data.push(newVal);
-            drillDownChart.update('none');
-        }, 1000);
-    }
 }
+
+window.updateMetricChart = function(payload)
+{
+    if (drillDownChart && payload)
+    {
+        const ds = drillDownChart.data.datasets[0];
+        let val = (currentDrillDownMetric === 'cpu') ? payload.cpu_temp : payload.ram_usage;
+        
+        if (val !== undefined)
+        {
+            ds.data.shift();
+            ds.data.push(val);
+            drillDownChart.update('none');
+        }
+    }
+};
 
 window.closeModal = function() 
 {
     document.getElementById('shared-modal-overlay').style.display = 'none';
+    currentDrillDownMetric = null;
     
     if (drillDownChart) 
     {
         drillDownChart.destroy();
         drillDownChart = null;
-    }
-    
-    if (drillDownInterval) 
-    {
-        clearInterval(drillDownInterval);
-        drillDownInterval = null;
     }
 };
 
@@ -365,176 +360,6 @@ function switchTab(tabId)
     }
 }
 
-let telemetryChart = null;
-let mockDataInterval = null;
-
-function toggleAdvancedView(isAdvanced) 
-{
-    const container = document.getElementById('advanced-graph-container');
-    if (isAdvanced) 
-    {
-        container.classList.remove('hidden');
-        if (!telemetryChart) 
-        {
-            initChart();
-        }
-        
-        if (!mockDataInterval) 
-        {
-            mockDataInterval = setInterval(feedMockData, 1000);
-        }
-    } 
-    else 
-    {
-        container.classList.add('hidden');
-        if (mockDataInterval) 
-        {
-            clearInterval(mockDataInterval);
-            mockDataInterval = null;
-        }
-    }
-}
-
-function initChart() 
-{
-    const ctx = document.getElementById('telemetryChart').getContext('2d');
-    
-    Chart.defaults.color = '#a0a0a0';
-    Chart.defaults.font.family = 'system-ui, -apple-system, sans-serif';
-
-    telemetryChart = new Chart(ctx, 
-    {
-        type: 'line',
-        data: 
-        {
-            labels: Array(60).fill(''), 
-            datasets: 
-            [
-                {
-                    label: 'CPU Temp (°C)',
-                    borderColor: '#e57373', 
-                    backgroundColor: 'rgba(229, 115, 115, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHitRadius: 10,
-                    tension: 0.4,
-                    yAxisID: 'y',
-                    data: Array(60).fill(null)
-                },
-                {
-                    label: 'RAM Usage (%)',
-                    borderColor: '#bb86fc', 
-                    backgroundColor: 'rgba(187, 134, 252, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHitRadius: 10,
-                    tension: 0.4,
-                    yAxisID: 'y1',
-                    data: Array(60).fill(null)
-                }
-            ]
-        },
-        options: 
-        {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: 
-            { 
-                mode: 'index', 
-                intersect: false 
-            },
-            plugins: 
-            {
-                legend: 
-                { 
-                    position: 'top', 
-                    labels: 
-                    { 
-                        usePointStyle: true, 
-                        boxWidth: 8 
-                    } 
-                },
-                tooltip: 
-                { 
-                    backgroundColor: '#1e1e1e', 
-                    titleColor: '#e0e0e0', 
-                    bodyColor: '#e0e0e0', 
-                    borderColor: '#333', 
-                    borderWidth: 1 
-                }
-            },
-            scales: 
-            {
-                x: 
-                { 
-                    display: false, 
-                    grid: 
-                    { 
-                        display: false 
-                    } 
-                },
-                y: 
-                { 
-                    type: 'linear', 
-                    display: true, 
-                    position: 'left',
-                    title: 
-                    { 
-                        display: true, 
-                        text: 'Temp (°C)' 
-                    },
-                    min: 30, 
-                    max: 90,
-                    grid: 
-                    { 
-                        color: '#333' 
-                    }
-                },
-                y1: 
-                {
-                    type: 'linear', 
-                    display: true, 
-                    position: 'right',
-                    title: 
-                    { 
-                        display: true, 
-                        text: 'RAM (%)' 
-                    },
-                    min: 0, 
-                    max: 100,
-                    grid: 
-                    { 
-                        drawOnChartArea: false 
-                    }
-                }
-            }
-        }
-    });
-}
-
-function feedMockData() 
-{
-    if (!telemetryChart) 
-    {
-        return;
-    }
-    
-    const datasets = telemetryChart.data.datasets;
-    const lastTemp = datasets[0].data[59] || 45;
-    const lastRam = datasets[1].data[59] || 25;
-    
-    const newTemp = Math.min(85, Math.max(35, lastTemp + (Math.random() * 2 - 1)));
-    const newRam = Math.min(100, Math.max(10, lastRam + (Math.random() * 4 - 2)));
-
-    datasets[0].data.shift();
-    datasets[0].data.push(newTemp);
-    
-    datasets[1].data.shift();
-    datasets[1].data.push(newRam);
-    
-    telemetryChart.update('none'); 
-}
-
 function toggleTheme(forceLight = null) 
 {
     const root = document.documentElement;
@@ -582,4 +407,26 @@ window.onload = () =>
     {
         connectWebSocket();
     }
+};
+
+window.openInfoModal = function(type)
+{
+    const title = document.getElementById('modal-title');
+    const bodyContent = document.getElementById('modal-body-content');
+    
+    document.getElementById('modal-card-container').style.maxWidth = '420px';
+
+    if (type === 'load')
+    {
+        title.textContent = "What is Load Average?";
+        bodyContent.innerHTML = `
+            <p class="modal-desc">
+                Load average represents the average number of system processes in a runnable or uninterruptible state over the last 1, 5, and 15 minutes. 
+                <br><br>
+                A value of 1.00 on a single-core system means 100% CPU utilization. On your Raspberry Pi 5, values should be interpreted relative to the quad-core architecture.
+            </p>
+        `;
+    }
+    
+    document.getElementById('shared-modal-overlay').style.display = 'flex';
 };
