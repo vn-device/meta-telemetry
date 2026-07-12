@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import subprocess
 import os
 
@@ -6,11 +7,12 @@ def test_camera():
     output_directory = "/home/root/camera_captures"
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
-        
+
     output_file = os.path.join(output_directory, "test_image.jpg")
-    
+
+    # Correct binary prefix synchronization for the main branch pipeline
     cmd = ["rpicam-still", "-o", output_file, "--width", "1920", "--height", "1080", "--timeout", "2000"]
-    
+
     try:
         subprocess.run(cmd, check=True)
         print(f"Success! Image saved to {output_file}")
