@@ -20,6 +20,26 @@ This layer establishes a strictly decoupled, event-driven telemetry pipeline opt
 * **Web Serving:** Lighttpd (Optimized for static assets)
 * **Frontend:** HTML5, CSS3, native JavaScript ES6 WebSockets
 * **Process Management:** systemd
+* **Imaging Pipeline:** libcamera (v0.7.1+), libpisp (v1.6.0), rpicam-apps
+
+## 🔌 Hardware Setup & Host Configuration
+
+To support high-throughput, high-resolution MIPI CSI-2 camera data streams (such as the 11.9 MP IMX708 sensor), the target's GPU bootloader parameters must be customized to allocate sufficient Contiguous Memory Allocation (CMA) buffers.
+
+Add the following to your host's local configuration file at `/home/vboxuser/rpi-yocto/build-pi5/conf/local.conf`:
+
+```bitbake
+# --- Raspberry Pi Specific Settings ---
+# Enable UART for serial console debugging
+ENABLE_UART = "1"
+
+# REQUIRED: Accept the Broadcom graphics/firmware licenses for the Pi 5
+LICENSE_FLAGS_ACCEPTED += "synaptics-killswitch commercial_bcm2835-bootfiles"
+
+# Enforce camera configuration and override the KMS display driver allocation argument.
+# Using explicit '\n' ensures the lines are separated correctly in config.txt.
+RPI_EXTRA_CONFIG = "dtoverlay=imx708\ndtoverlay=vc4-kms-v3d,cma-512"
+```
 
 ## 🚀 Build and Deployment Instructions
 
