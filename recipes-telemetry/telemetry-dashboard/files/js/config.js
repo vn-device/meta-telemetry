@@ -22,3 +22,9 @@ const piPinout = [
 ];
 
 const frontendGpioState = {};
+
+const cameraState = {
+    isStreaming: false,
+    isRecording: false,
+    resolution: "1920x1080"
+};

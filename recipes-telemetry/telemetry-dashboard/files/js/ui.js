@@ -358,6 +358,17 @@ function switchTab(tabId)
             btn.classList.add('active');
         }
     }
+
+    if (tabId === 'camera')
+    {
+        console.log("Activating camera preview stream...");
+        // ws.send(JSON.stringify({ type: 'START_PREVIEW_STREAM' }));
+    }
+    else
+    {
+        console.log("Halting camera preview stream...");
+        // ws.send(JSON.stringify({ type: 'STOP_PREVIEW_STREAM' }));
+    }
 }
 
 function toggleTheme(forceLight = null) 
@@ -430,3 +441,26 @@ window.openInfoModal = function(type)
     
     document.getElementById('shared-modal-overlay').style.display = 'flex';
 };
+
+function triggerCapture()
+{
+    console.log("Sending CAPTURE_IMAGE command...");
+    // Future: ws.send(JSON.stringify({ type: 'CAPTURE_IMAGE_REQUEST' }));
+}
+
+function toggleRecord()
+{
+    const btn = document.getElementById('record-btn');
+    cameraState.isRecording = !cameraState.isRecording;
+    
+    if (cameraState.isRecording)
+    {
+        btn.classList.add('recording');
+    }
+    else
+    {
+        btn.classList.remove('recording');
+    }
+    
+    console.log("Recording state:", cameraState.isRecording);
+}

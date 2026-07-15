@@ -28,6 +28,7 @@
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('telemetry')">Telemetry Overview</button>
             <button class="tab-btn" onclick="switchTab('gpio')">I/O Pinout</button>
+            <button class="tab-btn" onclick="switchTab('camera')">Camera Module 3</button>
         </div>
 
         <!-- Reusable Modal Overlay for both Pins and Metrics -->
@@ -100,6 +101,31 @@
                     <div class="legend-item legend-gnd"><div class="legend-ring"></div><span class="legend-label">Ground</span></div>
                     <div class="legend-item legend-gpio"><div class="legend-ring"></div><span class="legend-label">Configurable I/O</span></div>
                     <div class="legend-item legend-reserved"><div class="legend-ring"></div><span class="legend-label">System Reserved</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-camera" class="tab-content">
+            <div class="pinout-container">
+                <div class="controls-header" style="text-align: center;">Live Viewfinder (IMX708)</div>
+                
+                <!-- Viewfinder Zone -->
+                <div class="camera-container">
+                    <div class="camera-hud">
+                        <span id="cam-status" class="status-badge">Standby</span>
+                        <span id="cam-fps" class="hud-text">0 FPS / 16:9</span>
+                    </div>
+                    <canvas id="viewfinder-canvas"></canvas>
+                </div>
+                
+                <!-- New Dedicated Control Zone -->
+                <div class="camera-footer-controls">
+                    <button class="btn capture-btn" onclick="triggerCapture()" title="Take Photo">
+                        <div class="capture-icon"></div>
+                    </button>
+                    <button class="btn record-btn" id="record-btn" onclick="toggleRecord()" title="Record Video">
+                        <div class="record-icon"></div>
+                    </button>
                 </div>
             </div>
         </div>
