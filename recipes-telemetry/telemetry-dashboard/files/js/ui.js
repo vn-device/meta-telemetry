@@ -323,20 +323,40 @@ function updatePinState(pinId, isHigh)
 
 window.handleCommandResponse = function(payload)
 {
+    // Handle GPIO Modal Controls
     const controls = document.getElementById('modal-controls');
-    
     if (controls) 
     {
         controls.style.opacity = '1';
         controls.style.pointerEvents = 'auto';
     }
 
+    // Process general errors
     if (payload.status === "ERROR") 
     {
-        console.error(`Hardware Interlock Triggered for Pin ${payload.pin}: ${payload.message}`);
+        console.error(`Command Failed: ${payload.message}`);
+        if (payload.pin !== undefined)
+        {
+            window.openPinModal(payload.pin);
+        }
+        return;
     }
-    
-    window.openPinModal(payload.pin);
+
+    // Process Camera Commands
+    if (payload.command === "CAPTURE_IMAGE_REQUEST")
+    {
+        console.log(`[SUCCESS] Image captured and saved to: ${payload.file_path} (${payload.file_size_bytes} bytes)`);
+        // Optional: Trigger a UI toast notification here in the future
+    }
+    else if (payload.command === "STOP_RECORDING_REQUEST")
+    {
+        console.log(`[SUCCESS] Video finalized and saved to: ${payload.file_path} (${payload.file_size_bytes} bytes)`);
+    }
+    // Process GPIO Commands
+    else if (payload.pin !== undefined)
+    {
+        window.openPinModal(payload.pin);
+    }
 };
 
 function switchTab(tabId)
@@ -362,12 +382,41 @@ function switchTab(tabId)
     if (tabId === 'camera')
     {
         console.log("Activating camera preview stream...");
-        // ws.send(JSON.stringify({ type: 'START_PREVIEW_STREAM' }));
+        
+        if (ws && ws.readyState === WebSocket.OPEN)
+        {
+            const frame = 
+            {
+                type: 'START_PREVIEW_STREAM',
+                timestamp: Date.now(),
+                payload: 
+                {
+                    width: 640,
+                    height: 360,
+                    fps: 15
+                }
+            };
+            
+            ws.send(JSON.stringify(frame));
+        }
     }
     else
     {
         console.log("Halting camera preview stream...");
-        // ws.send(JSON.stringify({ type: 'STOP_PREVIEW_STREAM' }));
+        
+        if (ws && ws.readyState === WebSocket.OPEN)
+        {
+            const frame = 
+            {
+                type: 'STOP_PREVIEW_STREAM',
+                timestamp: Date.now(),
+                payload: 
+                {
+                }
+            };
+            
+            ws.send(JSON.stringify(frame));
+        }
     }
 }
 
@@ -445,7 +494,22 @@ window.openInfoModal = function(type)
 function triggerCapture()
 {
     console.log("Sending CAPTURE_IMAGE command...");
-    // Future: ws.send(JSON.stringify({ type: 'CAPTURE_IMAGE_REQUEST' }));
+    if (ws && ws.readyState === WebSocket.OPEN)
+    {
+        const frame = 
+        {
+            type: 'CAPTURE_IMAGE_REQUEST',
+            timestamp: Date.now(),
+            payload: 
+            {
+                width: 4608,
+                height: 2592,
+                format: "JPEG"
+            }
+        };
+        
+        ws.send(JSON.stringify(frame));
+    }
 }
 
 function toggleRecord()
@@ -456,10 +520,44 @@ function toggleRecord()
     if (cameraState.isRecording)
     {
         btn.classList.add('recording');
+        console.log("Sending START_RECORDING_REQUEST command...");
+        
+        if (ws && ws.readyState === WebSocket.OPEN)
+        {
+            const frame = 
+            {
+                type: 'START_RECORDING_REQUEST',
+                timestamp: Date.now(),
+                payload: 
+                {
+                    width: 1920,
+                    height: 1080,
+                    fps: 30,
+                    codec: "H264"
+                }
+            };
+            
+            ws.send(JSON.stringify(frame));
+        }
     }
     else
     {
         btn.classList.remove('recording');
+        console.log("Sending STOP_RECORDING_REQUEST command...");
+        
+        if (ws && ws.readyState === WebSocket.OPEN)
+        {
+            const frame = 
+            {
+                type: 'STOP_RECORDING_REQUEST',
+                timestamp: Date.now(),
+                payload: 
+                {
+                }
+            };
+            
+            ws.send(JSON.stringify(frame));
+        }
     }
     
     console.log("Recording state:", cameraState.isRecording);
