@@ -273,7 +273,7 @@ window.handleOverlayClick = function(event)
 
 function sendGpioCommand(pinId, mode, val)
 {
-    if (!ws || ws.readyState !== WebSocket.OPEN) 
+    if (!sysWs || sysWs.readyState !== WebSocket.OPEN) 
     {
         console.error("Cannot execute command: Backend daemon is currently disconnected.");
         window.openPinModal(pinId);
@@ -305,7 +305,7 @@ function sendGpioCommand(pinId, mode, val)
         }
     };
     
-    ws.send(JSON.stringify(commandFrame));
+    sysWs.send(JSON.stringify(commandFrame));
 }
 
 function updatePinMode(pinId, mode)
@@ -463,9 +463,9 @@ window.onload = () =>
 {
     initTheme();
     renderPinout();
-    if (typeof connectWebSocket === 'function') 
+    if (typeof connectWebSockets === 'function') 
     {
-        connectWebSocket();
+        connectWebSockets();
     }
 };
 

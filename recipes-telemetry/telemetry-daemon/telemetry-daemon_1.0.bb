@@ -15,17 +15,17 @@ SRC_URI = " \
     file://main.cpp \
     file://TelemetryServer.h \
     file://TelemetryServer.cpp \
+    file://HardwareMonitor.h \
+    file://HardwareMonitor.cpp \
     file://telemetry-daemon.service \
 "
 
 S = "${WORKDIR}"
 
 do_install() {
-    # Install the compiled binary from the CMake Build directory (${B})
     install -d ${D}${bindir}
     install -m 0755 ${B}/telemetry_daemon ${D}${bindir}/telemetry_daemon
 
-    # Install the systemd service file from the Working directory
     install -d ${D}${systemd_system_unitdir}
     install -m 0644 ${WORKDIR}/telemetry-daemon.service ${D}${systemd_system_unitdir}/
 }

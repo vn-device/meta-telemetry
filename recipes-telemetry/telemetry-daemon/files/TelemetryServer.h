@@ -10,6 +10,7 @@
 #include <gpiod.hpp> 
 #include <map>
 #include <string>
+#include "HardwareMonitor.h"
 
 class TelemetryServer : public QObject
 {
@@ -31,16 +32,6 @@ private:
     
     // Uptime tracking
     QElapsedTimer m_uptimeTimer;
-    qint64 getOsUptime();
-    
-    // System Telemetry
-    float getCpuTemp();
-    float getLoadAvg();
-    int getRamUsage();
-    
-    // Hardware Diagnostics
-    bool getUnderVoltageStatus();
-    std::string executeCommand(const char* cmd);
     
     // Hardware interface (libgpiod v2)
     std::map<int, gpiod::line_request> m_activeLines;

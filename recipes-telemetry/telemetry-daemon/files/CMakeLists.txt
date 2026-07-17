@@ -14,6 +14,8 @@ add_executable(telemetry_daemon
     main.cpp
     TelemetryServer.cpp
     TelemetryServer.h
+    HardwareMonitor.cpp
+    HardwareMonitor.h
 )
 
 target_include_directories(telemetry_daemon PRIVATE ${GPIOD_INCLUDE_DIRS})

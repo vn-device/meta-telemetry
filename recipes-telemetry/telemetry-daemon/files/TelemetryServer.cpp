@@ -2,18 +2,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QFile>
 #include <QDebug>
 #include <QThread>
+#include <QVariant>
+#include <QDateTime>
 #include <utility>
-#include <gpiod.hpp>
-#include <map>
-#include <fstream>
-#include <string>
-#include <iostream>
-#include <array>
-#include <memory>
-#include <stdexcept>
 
 // Translates physical header pins (1-40) to internal RP1 SoC line offsets
 static int getBcmFromPhysical(int physicalPin) 
@@ -68,6 +61,7 @@ void TelemetryServer::onNewConnection()
 void TelemetryServer::processTextMessage(const QString &message) 
 {
     QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+    
     if (!pClient) 
     {
         return;
@@ -163,6 +157,7 @@ void TelemetryServer::processTextMessage(const QString &message)
 void TelemetryServer::socketDisconnected() 
 {
     QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
+    
     if (pClient) 
     {
         m_clients.removeAll(pClient);
@@ -171,159 +166,15 @@ void TelemetryServer::socketDisconnected()
     }
 }
 
-qint64 TelemetryServer::getOsUptime() 
-{
-    QFile file("/proc/uptime");
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) 
-    {
-        QString content = file.readAll();
-        file.close();
-        QStringList parts = content.split(" ");
-        if (!parts.isEmpty()) 
-        {
-            return parts[0].toDouble();
-        }
-    }
-    return 0;
-}
-
-float TelemetryServer::getCpuTemp() 
-{
-    QFile file("/sys/class/thermal/thermal_zone0/temp");
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) 
-    {
-        QString content = file.readAll().trimmed();
-        file.close();
-        bool ok;
-        float temp = content.toFloat(&ok);
-        
-        if (ok) 
-        {
-            return temp / 1000.0f; 
-        }
-    }
-
-    return 0.0f;
-}
-
-float TelemetryServer::getLoadAvg() 
-{
-    QFile file("/proc/loadavg");
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) 
-    {
-        QString content = file.readAll();
-        file.close();
-
-        QStringList parts = content.split(" ");
-        if (!parts.isEmpty()) 
-        {
-            return parts[0].toFloat();
-        }
-    }
-
-    return 0.0f;
-}
-
-int TelemetryServer::getRamUsage()
-{
-    std::ifstream file("/proc/meminfo");
-    
-    if (!file.is_open())
-    {
-        std::cerr << "Error: Unable to open /proc/meminfo" << std::endl;
-        return -1;
-    }
-
-    std::string token;
-    long memTotal = 0;
-    long memAvailable = 0;
-
-    while (file >> token)
-    {
-        if (token == "MemTotal:")
-        {
-            file >> memTotal;
-        }
-        else if (token == "MemAvailable:")
-        {
-            file >> memAvailable;
-        }
-        
-        if (memTotal > 0 && memAvailable > 0)
-        {
-            break;
-        }
-    }
-
-    file.close();
-
-    if (memTotal > 0)
-    {
-        long usedMem = memTotal - memAvailable;
-        return static_cast<int>((usedMem * 100) / memTotal);
-    }
-
-    return -1;
-}
-
-std::string TelemetryServer::executeCommand(const char* cmd)
-{
-    std::array<char, 128> buffer;
-    std::string result;
-    
-    // Leverage popen to fork a process and create a unidirectional pipe.
-    // Wrap the FILE pointer in a unique_ptr with a custom deleter (pclose) 
-    // to guarantee memory cleanup and prevent file descriptor leaks.
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
-    
-    if (!pipe)
-    {
-        throw std::runtime_error("Failed to allocate pipe for command execution.");
-    }
-    
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr)
-    {
-        result += buffer.data();
-    }
-    
-    return result;
-}
-
-bool TelemetryServer::getUnderVoltageStatus()
-{
-    try
-    {
-        // The Broadcom VideoCore GPU returns a bitfield formatted as "throttled=0xXXXXX"
-        std::string output = executeCommand("vcgencmd get_throttled");
-        
-        size_t pos = output.find("0x");
-        if (pos != std::string::npos)
-        {
-            std::string hexStr = output.substr(pos + 2);
-            uint32_t throttledState = std::stoul(hexStr, nullptr, 16);
-            
-            // Apply bitwise AND mask to extract specific hardware states:
-            // Bit 0 (0x00001): Under-voltage currently occurring.
-            return (throttledState & 0x01) != 0;
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Exception during vcgencmd parse: " << e.what() << std::endl;
-    }
-    
-    return false;
-}
-
 void TelemetryServer::broadcastHeartbeat() 
 {
     QJsonObject payload;
-    payload["os_uptime"] = getOsUptime();
+    payload["os_uptime"] = static_cast<qint64>(HardwareMonitor::getOsUptime());
     payload["daemon_uptime"] = m_uptimeTimer.elapsed() / 1000;
-    payload["cpu_temp"] = getCpuTemp();
-    payload["load_avg"] = getLoadAvg();
-    payload["ram_usage"] = getRamUsage();
-    payload["power_warn"] = getUnderVoltageStatus(); 
+    payload["cpu_temp"] = HardwareMonitor::getCpuTemperature();
+    payload["load_avg"] = HardwareMonitor::getLoadAverage();
+    payload["ram_usage"] = HardwareMonitor::getRamUsagePercentage();
+    payload["power_warn"] = HardwareMonitor::getUndervoltageWarning();
 
     QJsonObject packet;
     packet["type"] = "HEARTBEAT";
@@ -331,6 +182,7 @@ void TelemetryServer::broadcastHeartbeat()
     packet["payload"] = payload;
 
     QString msg = QJsonDocument(packet).toJson(QJsonDocument::Compact);
+    
     for (QWebSocket *client : std::as_const(m_clients)) 
     {
         client->sendTextMessage(msg);
