@@ -1,0 +1,14 @@
+[Unit]
+Description=Media Controller Daemon for IMX708 Camera
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/media-controller
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

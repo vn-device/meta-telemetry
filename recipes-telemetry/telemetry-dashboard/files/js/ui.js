@@ -383,7 +383,7 @@ function switchTab(tabId)
     {
         console.log("Activating camera preview stream...");
         
-        if (ws && ws.readyState === WebSocket.OPEN)
+        if (camWs && camWs.readyState === WebSocket.OPEN)
         {
             const frame = 
             {
@@ -397,14 +397,14 @@ function switchTab(tabId)
                 }
             };
             
-            ws.send(JSON.stringify(frame));
+            camWs.send(JSON.stringify(frame));
         }
     }
     else
     {
         console.log("Halting camera preview stream...");
         
-        if (ws && ws.readyState === WebSocket.OPEN)
+        if (camWs && camWs.readyState === WebSocket.OPEN)
         {
             const frame = 
             {
@@ -415,7 +415,7 @@ function switchTab(tabId)
                 }
             };
             
-            ws.send(JSON.stringify(frame));
+            camWs.send(JSON.stringify(frame));
         }
     }
 }
@@ -494,7 +494,7 @@ window.openInfoModal = function(type)
 function triggerCapture()
 {
     console.log("Sending CAPTURE_IMAGE command...");
-    if (ws && ws.readyState === WebSocket.OPEN)
+    if (camWs && camWs.readyState === WebSocket.OPEN)
     {
         const frame = 
         {
@@ -508,7 +508,7 @@ function triggerCapture()
             }
         };
         
-        ws.send(JSON.stringify(frame));
+        camWs.send(JSON.stringify(frame));
     }
 }
 
@@ -522,7 +522,7 @@ function toggleRecord()
         btn.classList.add('recording');
         console.log("Sending START_RECORDING_REQUEST command...");
         
-        if (ws && ws.readyState === WebSocket.OPEN)
+        if (camWs && camWs.readyState === WebSocket.OPEN)
         {
             const frame = 
             {
@@ -537,7 +537,7 @@ function toggleRecord()
                 }
             };
             
-            ws.send(JSON.stringify(frame));
+            camWs.send(JSON.stringify(frame));
         }
     }
     else
@@ -545,7 +545,7 @@ function toggleRecord()
         btn.classList.remove('recording');
         console.log("Sending STOP_RECORDING_REQUEST command...");
         
-        if (ws && ws.readyState === WebSocket.OPEN)
+        if (camWs && camWs.readyState === WebSocket.OPEN)
         {
             const frame = 
             {
@@ -556,7 +556,7 @@ function toggleRecord()
                 }
             };
             
-            ws.send(JSON.stringify(frame));
+            camWs.send(JSON.stringify(frame));
         }
     }
     

@@ -1,19 +1,29 @@
 // network.js
-let ws;
+let sysWs;
+let camWs;
 let lastHeartbeat = 0;
 let sentinelTimer;
 let frameCount = 0;
 let lastFpsTime = Date.now();
 
-function connectWebSocket()
+function connectWebSockets()
 {
-    ws = new WebSocket(`ws://${window.location.hostname}:8080`);
+    connectSystemSocket();
+    connectCameraSocket();
+}
 
-    ws.onopen = () =>
+function connectSystemSocket()
+{
+    sysWs = new WebSocket('ws://' + window.location.hostname + ':8080');
+
+    sysWs.onopen = () =>
     {
         const status = document.getElementById('conn-status');
-        status.textContent = 'Connected';
-        status.classList.add('connected');
+        if (status)
+        {
+            status.textContent = 'System Connected';
+            status.classList.add('connected');
+        }
         
         const helloPacket = 
         { 
@@ -24,22 +34,13 @@ function connectWebSocket()
             } 
         };
         
-        ws.send(JSON.stringify(helloPacket));
-
+        sysWs.send(JSON.stringify(helloPacket));
         lastHeartbeat = Date.now();
         startSentinel();
     };
 
-    ws.onmessage = async (event) =>
+    sysWs.onmessage = (event) =>
     {
-        // Intercept binary frames for the MJPEG viewfinder stream
-        if (event.data instanceof Blob)
-        {
-            const arrayBuffer = await event.data.arrayBuffer();
-            handleBinaryFrame(arrayBuffer);
-            return;
-        }
-
         try
         {
             const data = JSON.parse(event.data);
@@ -99,21 +100,21 @@ function connectWebSocket()
                 {
                     if (data.payload && data.payload.pins)
                     {
-                         Object.assign(frontendGpioState, data.payload.pins);
-                         
-                         const openPinTitle = document.getElementById('modal-title').textContent;
-                         if (document.getElementById('pin-modal-overlay') && document.getElementById('pin-modal-overlay').style.display === 'flex' && openPinTitle.includes('Pin'))
-                         {
-                             const pinIdStr = openPinTitle.split(' ')[1].replace(':', '');
-                             const pinId = parseInt(pinIdStr, 10);
-                             if (!isNaN(pinId)) 
-                             {
-                                 if (typeof window.openPinModal === 'function') 
-                                 {
-                                     window.openPinModal(pinId);
-                                 }
-                             }
-                         }
+                        Object.assign(frontendGpioState, data.payload.pins);
+                        
+                        const openPinTitle = document.getElementById('modal-title').textContent;
+                        if (document.getElementById('pin-modal-overlay') && document.getElementById('pin-modal-overlay').style.display === 'flex' && openPinTitle.includes('Pin'))
+                        {
+                            const pinIdStr = openPinTitle.split(' ')[1].replace(':', '');
+                            const pinId = parseInt(pinIdStr, 10);
+                            if (!isNaN(pinId)) 
+                            {
+                                if (typeof window.openPinModal === 'function') 
+                                {
+                                    window.openPinModal(pinId);
+                                }
+                            }
+                        }
                     }
                     break;
                 }
@@ -125,38 +126,100 @@ function connectWebSocket()
                     }
                     break;
                 }
-                case 'RECORDING_STATE_UPDATE':
-                {
-                    console.log(`[DAEMON] Recording active: ${data.payload.elapsed_seconds}s - ${data.payload.file_path}`);
-                    break;
-                }
                 case 'ERROR_REPORT':
                 {
-                    console.error(`[DAEMON ERROR] ${data.payload.source} (${data.payload.code}): ${data.payload.message}`);
+                    console.error(`[SYSTEM DAEMON ERROR] ${data.payload.source} (${data.payload.code}): ${data.payload.message}`);
                     break;
                 }
                 default:
                 {
-                    console.warn("Unknown packet type received:", data.type);
+                    console.warn("Unknown packet type received on system socket:", data.type);
                     break;
                 }
             }
         }
         catch (e) 
         {
-            console.error("Failed to parse incoming WS frame:", e);
+            console.error("Failed to parse incoming system WS frame:", e);
         }
     };
 
-    ws.onclose = () => 
+    sysWs.onclose = () => 
     {
         handleDisconnect();
-        setTimeout(connectWebSocket, 2000);
+        setTimeout(connectSystemSocket, 2000);
     };
 
-    ws.onerror = (error) => 
+    sysWs.onerror = (error) => 
     {
-        console.error('WebSocket Error:', error);
+        console.error('System WebSocket Error:', error);
+    };
+}
+
+function connectCameraSocket()
+{
+    camWs = new WebSocket('ws://' + window.location.hostname + ':8081');
+
+    camWs.onopen = () =>
+    {
+        console.log('Camera WebSocket Connected');
+    };
+
+    camWs.onmessage = async (event) =>
+    {
+        if (event.data instanceof Blob)
+        {
+            const arrayBuffer = await event.data.arrayBuffer();
+            handleBinaryFrame(arrayBuffer);
+            return;
+        }
+
+        try
+        {
+            const data = JSON.parse(event.data);
+            
+            switch(data.type)
+            {
+                case 'COMMAND_RESPONSE':
+                {
+                    if (typeof window.handleCommandResponse === 'function') 
+                    {
+                        window.handleCommandResponse(data.payload);
+                    }
+                    break;
+                }
+                case 'RECORDING_STATE_UPDATE':
+                {
+                    console.log(`[CAMERA DAEMON] Recording active: ${data.payload.elapsed_seconds}s - ${data.payload.file_path}`);
+                    break;
+                }
+                case 'ERROR_REPORT':
+                {
+                    console.error(`[CAMERA DAEMON ERROR] ${data.payload.source} (${data.payload.code}): ${data.payload.message}`);
+                    break;
+                }
+                default:
+                {
+                    console.warn("Unknown packet type received on camera socket:", data.type);
+                    break;
+                }
+            }
+        }
+        catch (e) 
+        {
+            console.error("Failed to parse incoming camera WS frame:", e);
+        }
+    };
+
+    camWs.onclose = () => 
+    {
+        console.warn('Camera WebSocket Disconnected');
+        setTimeout(connectCameraSocket, 2000);
+    };
+
+    camWs.onerror = (error) => 
+    {
+        console.error('Camera WebSocket Error:', error);
     };
 }
 
@@ -172,11 +235,11 @@ function startSentinel()
         const now = Date.now();
         if (now - lastHeartbeat > 3000) 
         { 
-            console.warn("Sentinel Watchdog: Connection lost (Timeout threshold reached).");
+            console.warn("Sentinel Watchdog: System connection lost (Timeout threshold reached).");
             handleDisconnect();
-            if (ws && ws.readyState === WebSocket.OPEN) 
+            if (sysWs && sysWs.readyState === WebSocket.OPEN) 
             {
-                ws.close();
+                sysWs.close();
             }
         }
     }, 1000);
@@ -185,11 +248,23 @@ function startSentinel()
 function handleDisconnect()
 {
     const status = document.getElementById('conn-status');
-    status.textContent = 'Disconnected';
-    status.classList.remove('connected');
+    if (status)
+    {
+        status.textContent = 'Disconnected';
+        status.classList.remove('connected');
+    }
     
-    document.getElementById('os-runtime').textContent = '0s';
-    document.getElementById('app-runtime').textContent = '0s';
+    const osRuntime = document.getElementById('os-runtime');
+    const appRuntime = document.getElementById('app-runtime');
+    
+    if (osRuntime)
+    {
+        osRuntime.textContent = '0s';
+    }
+    if (appRuntime)
+    {
+        appRuntime.textContent = '0s';
+    }
     
     if (sentinelTimer) 
     {
@@ -221,11 +296,14 @@ function handleBinaryFrame(arrayBuffer)
         {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             
-            // Explicitly release memory to prevent Blob memory leaks in the browser heap
             URL.revokeObjectURL(imageUrl);
             
-            document.getElementById('cam-status').textContent = "Live";
-            document.getElementById('cam-status').className = "status-badge connected";
+            const camStatus = document.getElementById('cam-status');
+            if (camStatus)
+            {
+                camStatus.textContent = "Live";
+                camStatus.className = "status-badge connected";
+            }
             
             frameCount++;
             const now = Date.now();
@@ -233,7 +311,11 @@ function handleBinaryFrame(arrayBuffer)
             if (now - lastFpsTime >= 1000)
             {
                 const fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
-                document.getElementById('cam-fps').textContent = `${fps} FPS / 16:9`;
+                const fpsCounter = document.getElementById('cam-fps');
+                if (fpsCounter)
+                {
+                    fpsCounter.textContent = `${fps} FPS / 16:9`;
+                }
                 frameCount = 0;
                 lastFpsTime = now;
             }
