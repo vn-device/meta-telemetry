@@ -159,18 +159,21 @@ function connectSystemSocket()
 function connectCameraSocket()
 {
     camWs = new WebSocket('ws://' + window.location.hostname + ':8081');
+    
+    // 1. Optimize memory by requesting raw ArrayBuffers instead of Blobs
+    camWs.binaryType = 'arraybuffer';
 
     camWs.onopen = () =>
     {
         console.log('Camera WebSocket Connected');
     };
 
-    camWs.onmessage = async (event) =>
+    // 2. Remove the async keyword, as we no longer need to await blob.arrayBuffer()
+    camWs.onmessage = (event) => 
     {
-        if (event.data instanceof Blob)
+        if (event.data instanceof ArrayBuffer)
         {
-            const arrayBuffer = await event.data.arrayBuffer();
-            handleBinaryFrame(arrayBuffer);
+            handleBinaryFrame(event.data);
             return;
         }
 
@@ -282,6 +285,13 @@ function handleBinaryFrame(arrayBuffer)
     const dataView = new DataView(arrayBuffer);
     const frameIndex = dataView.getUint32(0, false);
     const timeDelta = dataView.getUint32(4, false);
+    
+    // 3. Hardware validation check: Detect if backend JPEG compression failed
+    if (arrayBuffer.byteLength === 8)
+    {
+        console.error(`[FRAME ${frameIndex}] Payload empty. Backend QImage JPEG compression failed.`);
+        return;
+    }
 
     const jpegBlob = new Blob([arrayBuffer.slice(8)], { type: 'image/jpeg' });
     const imageUrl = URL.createObjectURL(jpegBlob);
@@ -320,6 +330,14 @@ function handleBinaryFrame(arrayBuffer)
                 lastFpsTime = now;
             }
         };
+        
+        // 4. Implement the error fallback to catch corrupted frames and prevent memory leaks
+        img.onerror = () => 
+        {
+            console.error(`[FRAME ${frameIndex}] Failed to decode JPEG payload (${arrayBuffer.byteLength} bytes). Frame dropped.`);
+            URL.revokeObjectURL(imageUrl);
+        };
+        
         img.src = imageUrl;
     }
 }

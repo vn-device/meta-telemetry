@@ -9,6 +9,7 @@
 #include <QImage>
 #include <QBuffer>
 #include <libcamera/control_ids.h>
+#include <QMetaObject>
 
 using namespace libcamera;
 
@@ -212,10 +213,13 @@ void MediaController::requestComplete(Request *request)
         QByteArray frameData = header;
         frameData.append(jpegData);
         
-        for (QWebSocket *client : std::as_const(m_clients))
-        {
-            client->sendBinaryMessage(frameData);
-        }
+        // Safely dispatch the WebSocket transmission back to the main Qt thread
+        QMetaObject::invokeMethod(this, [this, frameData]() {
+            for (QWebSocket *client : std::as_const(m_clients))
+            {
+                client->sendBinaryMessage(frameData);
+            }
+        }, Qt::QueuedConnection);
     }
     
     request->reuse(Request::ReuseBuffers);
