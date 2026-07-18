@@ -1,35 +1,225 @@
 #include "MediaController.h"
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QDateTime>
+#include <QJsonArray>
 #include <QDebug>
-#include <QDataStream>
-#include <QByteArray>
+#include <QDateTime>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <QImage>
+#include <QBuffer>
+#include <libcamera/control_ids.h>
 
-MediaController::MediaController(quint16 port, QObject *parent)
-    : QObject(parent)
-    , m_pWebSocketServer(new QWebSocketServer(QStringLiteral("MediaController Daemon"), QWebSocketServer::NonSecureMode, this))
-    , m_pFrameTimer(new QTimer(this))
-    , m_frameIndex(0)
-    , m_targetFps(15)
+using namespace libcamera;
+
+MediaController::MediaController(quint16 port, QObject *parent) :
+    QObject(parent),
+    m_pWebSocketServer(new QWebSocketServer(QStringLiteral("Media Controller"), QWebSocketServer::NonSecureMode, this)),
+    m_isStreaming(false),
+    m_frameIndex(0),
+    m_lastFrameTime(0)
 {
     if (m_pWebSocketServer->listen(QHostAddress::Any, port))
     {
-        qDebug().noquote() << "[SERVER] MediaController active on port" << port;
+        qDebug() << "[SERVER] MediaController active on port" << port;
         connect(m_pWebSocketServer, &QWebSocketServer::newConnection, this, &MediaController::onNewConnection);
     }
-    else
-    {
-        qCritical().noquote() << "[SERVER] Port binding failure on port" << port;
-    }
-
-    connect(m_pFrameTimer, &QTimer::timeout, this, &MediaController::generateMockFrame);
+    
+    initializeCamera();
 }
 
 MediaController::~MediaController()
 {
+    stopPreviewStream();
+    
+    if (m_camera)
+    {
+        m_camera->release();
+        m_camera.reset();
+    }
+    
+    if (m_cameraManager)
+    {
+        m_cameraManager->stop();
+    }
+    
     m_pWebSocketServer->close();
     qDeleteAll(m_clients.begin(), m_clients.end());
+}
+
+void MediaController::initializeCamera()
+{
+    m_cameraManager = std::make_unique<CameraManager>();
+    m_cameraManager->start();
+    
+    if (m_cameraManager->cameras().empty())
+    {
+        qWarning() << "Hardware Error: No libcamera-compatible devices found on the CSI interface.";
+        return;
+    }
+    
+    m_camera = m_cameraManager->cameras().front();
+    if (m_camera->acquire() != 0)
+    {
+        qWarning() << "Hardware Lockout: Failed to acquire exclusivity over" << QString::fromStdString(m_camera->id());
+        m_camera.reset();
+        return;
+    }
+    
+    qDebug() << "Hardware ISP acquired:" << QString::fromStdString(m_camera->id());
+}
+
+void MediaController::startPreviewStream(int width, int height, int fps)
+{
+    if (!m_camera || m_isStreaming)
+    {
+        return;
+    }
+    
+    std::unique_ptr<libcamera::CameraConfiguration> config = m_camera->generateConfiguration({libcamera::StreamRole::Viewfinder});
+    libcamera::StreamConfiguration &streamConfig = config->at(0);
+    
+    streamConfig.size.width = width;
+    streamConfig.size.height = height;
+    
+    // Request an uncompressed format natively supported by the Pi 5 PiSP
+    streamConfig.pixelFormat = libcamera::formats::RGB888;
+    
+    if (config->validate() == libcamera::CameraConfiguration::Invalid)
+    {
+        qWarning() << "Camera stream configuration rejected by ISP.";
+        return;
+    }
+    
+    m_camera->configure(config.get());
+    m_stream = streamConfig.stream();
+    
+    m_allocator = std::make_unique<libcamera::FrameBufferAllocator>(m_camera);
+    m_allocator->allocate(m_stream);
+    
+    const std::vector<std::unique_ptr<libcamera::FrameBuffer>> &buffers = m_allocator->buffers(m_stream);
+    
+    for (unsigned int i = 0; i < buffers.size(); ++i)
+    {
+        const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
+        
+        // Execute POSIX mmap to bridge the kernel-space dmabuf file descriptor into user-space memory
+        void *memory = mmap(NULL, buffer->planes()[0].length, PROT_READ | PROT_WRITE, MAP_SHARED, buffer->planes()[0].fd.get(), 0);
+        
+        // mmap returns MAP_FAILED on failure. Failing to catch this causes a segfault during memory access.
+        if (memory == MAP_FAILED)
+        {
+            qWarning() << "Memory Allocation Error: Failed to memory map DMA buffer index" << i;
+            continue;
+        }
+
+        m_mappedBuffers[i] = std::make_pair(memory, buffer->planes()[0].length);
+        
+        std::unique_ptr<libcamera::Request> request = m_camera->createRequest(i);
+        request->addBuffer(m_stream, buffer.get());
+        m_requests.push_back(std::move(request));
+    }
+    
+    m_camera->requestCompleted.connect(this, &MediaController::requestComplete);
+    
+    // Calculate frame duration bounds in microseconds to enforce the target FPS
+    int64_t frameTimeMicroseconds = 1000000 / fps;
+    libcamera::ControlList controls;
+    controls.set(libcamera::controls::FrameDurationLimits, libcamera::Span<const int64_t, 2>({ frameTimeMicroseconds, frameTimeMicroseconds }));
+    
+    m_camera->start(&controls);
+    
+    for (std::unique_ptr<libcamera::Request> &request : m_requests)
+    {
+        m_camera->queueRequest(request.get());
+    }
+    
+    m_isStreaming = true;
+    qDebug() << "Hardware preview stream initialized at" << fps << "FPS.";
+}
+
+void MediaController::stopPreviewStream()
+{
+    if (!m_isStreaming || !m_camera)
+    {
+        return;
+    }
+    
+    m_camera->stop();
+    m_camera->requestCompleted.disconnect(this, &MediaController::requestComplete);
+    
+    // Purge active memory mappings to prevent heap leakage
+    for (auto const& [index, mapped] : m_mappedBuffers)
+    {
+        munmap(mapped.first, mapped.second);
+    }
+    
+    m_mappedBuffers.clear();
+    m_requests.clear();
+    m_allocator.reset();
+    
+    m_isStreaming = false;
+    qDebug() << "Hardware preview stream halted.";
+}
+
+void MediaController::requestComplete(Request *request)
+{
+    if (request->status() == Request::RequestCancelled)
+    {
+        return;
+    }
+    
+    const FrameBuffer *buffer = request->buffers().at(m_stream);
+    int requestCookie = request->cookie();
+    
+    void *memory = m_mappedBuffers[requestCookie].first;
+    unsigned int bytesused = buffer->metadata().planes()[0].bytesused;
+    
+    if (bytesused > 0 && !m_clients.isEmpty())
+    {
+        // Explicitly inject the hardware stream stride to prevent byte misalignment and image shearing
+        QImage image(static_cast<const uchar*>(memory), 
+                     m_stream->configuration().size.width, 
+                     m_stream->configuration().size.height, 
+                     m_stream->configuration().stride, 
+                     QImage::Format_RGB888);
+
+        // Compress the image to JPEG in memory
+        QByteArray jpegData;
+        QBuffer imgBuffer(&jpegData);
+        imgBuffer.open(QIODevice::WriteOnly);
+        image.save(&imgBuffer, "JPEG", 75);
+        
+        QByteArray header;
+        header.resize(8);
+        
+        quint32 currentFrameIndex = m_frameIndex++;
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        quint32 timeDelta = m_lastFrameTime > 0 ? (now - m_lastFrameTime) : 0;
+        m_lastFrameTime = now;
+        
+        // Pack the 8-byte metadata header
+        header[0] = (currentFrameIndex >> 24) & 0xFF;
+        header[1] = (currentFrameIndex >> 16) & 0xFF;
+        header[2] = (currentFrameIndex >> 8) & 0xFF;
+        header[3] = currentFrameIndex & 0xFF;
+        
+        header[4] = (timeDelta >> 24) & 0xFF;
+        header[5] = (timeDelta >> 16) & 0xFF;
+        header[6] = (timeDelta >> 8) & 0xFF;
+        header[7] = timeDelta & 0xFF;
+        
+        QByteArray frameData = header;
+        frameData.append(jpegData);
+        
+        for (QWebSocket *client : std::as_const(m_clients))
+        {
+            client->sendBinaryMessage(frameData);
+        }
+    }
+    
+    request->reuse(Request::ReuseBuffers);
+    m_camera->queueRequest(request);
 }
 
 void MediaController::onNewConnection()
@@ -38,48 +228,33 @@ void MediaController::onNewConnection()
     connect(pSocket, &QWebSocket::textMessageReceived, this, &MediaController::processTextMessage);
     connect(pSocket, &QWebSocket::disconnected, this, &MediaController::socketDisconnected);
     m_clients << pSocket;
+    qDebug() << "Client bound to Media Controller routing layer.";
 }
 
 void MediaController::processTextMessage(const QString &message)
 {
-    QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
-    if (!pClient)
+    QJsonParseError error;
+    QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &error);
+    
+    if (error.error != QJsonParseError::NoError || !doc.isObject())
     {
         return;
     }
 
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &parseError);
-    if (parseError.error != QJsonParseError::NoError)
+    QJsonObject root = doc.object();
+    QString type = root["type"].toString();
+    QJsonObject payload = root["payload"].toObject();
+    
+    if (type == "START_PREVIEW_STREAM")
     {
-        return;
+        int width = payload["width"].toInt(640);
+        int height = payload["height"].toInt(360);
+        int fps = payload["fps"].toInt(15);
+        startPreviewStream(width, height, fps);
     }
-
-    QJsonObject rootObj = doc.object();
-    QString type = rootObj.value(QStringLiteral("type")).toString();
-    QJsonObject payload = rootObj.value(QStringLiteral("payload")).toObject();
-
-    if (type == QLatin1String("START_PREVIEW_STREAM"))
-    {
-        int w = payload.value(QStringLiteral("width")).toInt(640);
-        int h = payload.value(QStringLiteral("height")).toInt(360);
-        int fps = payload.value(QStringLiteral("fps")).toInt(15);
-        
-        startPreviewStream(w, h, fps);
-        sendAcknowledge(pClient, type, QStringLiteral("SUCCESS"), QStringLiteral("Preview stream initialized."));
-    }
-    else if (type == QLatin1String("STOP_PREVIEW_STREAM"))
+    else if (type == "STOP_PREVIEW_STREAM")
     {
         stopPreviewStream();
-        sendAcknowledge(pClient, type, QStringLiteral("SUCCESS"), QStringLiteral("Preview stream stopped."));
-    }
-    else if (type == QLatin1String("CAPTURE_IMAGE_REQUEST"))
-    {
-        sendAcknowledge(pClient, type, QStringLiteral("SUCCESS"), QStringLiteral("Mock image captured."));
-    }
-    else if (type == QLatin1String("START_RECORDING_REQUEST") || type == QLatin1String("STOP_RECORDING_REQUEST"))
-    {
-        sendAcknowledge(pClient, type, QStringLiteral("SUCCESS"), QStringLiteral("Mock recording state toggled."));
     }
 }
 
@@ -90,91 +265,10 @@ void MediaController::socketDisconnected()
     {
         m_clients.removeAll(pClient);
         pClient->deleteLater();
-        
-        if (m_clients.isEmpty())
-        {
-            stopPreviewStream();
-        }
     }
-}
-
-void MediaController::startPreviewStream(int width, int height, int fps)
-{
-    Q_UNUSED(width);
-    Q_UNUSED(height);
     
-    m_targetFps = (fps > 0) ? fps : 15;
-    m_pFrameTimer->start(1000 / m_targetFps);
-}
-
-void MediaController::stopPreviewStream()
-{
-    m_pFrameTimer->stop();
-}
-
-void MediaController::generateMockFrame()
-{
     if (m_clients.isEmpty())
     {
-        return;
+        stopPreviewStream();
     }
-
-    // Minimal 1x1 black pixel JPEG to trigger browser img.onload without GUI dependencies
-    static const unsigned char dummyJpeg[] = 
-    {
-        0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x03, 0x02, 0x02, 0x02, 0x02, 0x02, 0x03, 0x02, 0x02,
-        0x02, 0x03, 0x03, 0x03, 0x03, 0x04, 0x06, 0x04, 0x04, 0x04, 0x04, 0x04, 0x08, 0x06, 0x06, 0x05,
-        0x06, 0x09, 0x08, 0x0a, 0x0a, 0x09, 0x08, 0x09, 0x09, 0x0b, 0x0c, 0x0f, 0x0c, 0x0b, 0x0b, 0x0e,
-        0x0b, 0x09, 0x09, 0x0d, 0x11, 0x0d, 0x0e, 0x0f, 0x10, 0x10, 0x11, 0x10, 0x0a, 0x0c, 0x12, 0x13,
-        0x12, 0x10, 0x13, 0x0f, 0x10, 0x10, 0x10, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01, 0x00, 0x01,
-        0x01, 0x01, 0x11, 0x00, 0xff, 0xc4, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xc4, 0x00, 0x14, 0x10, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0x37, 0xff, 0xd9
-    };
-
-    QByteArray payload;
-    QDataStream stream(&payload, QIODevice::WriteOnly);
-    
-    stream.setByteOrder(QDataStream::BigEndian);
-    
-    quint32 timeDelta = 1000 / m_targetFps;
-    
-    stream << m_frameIndex << timeDelta;
-    
-    payload.append(reinterpret_cast<const char*>(dummyJpeg), sizeof(dummyJpeg));
-
-    for (QWebSocket *client : qAsConst(m_clients))
-    {
-        client->sendBinaryMessage(payload);
-    }
-
-    m_frameIndex++;
-}
-
-void MediaController::sendAcknowledge(QWebSocket *pClient, const QString &origCommand, const QString &status, const QString &message)
-{
-    QJsonObject responseObj;
-    responseObj.insert(QStringLiteral("type"), QStringLiteral("COMMAND_RESPONSE"));
-    responseObj.insert(QStringLiteral("timestamp"), QDateTime::currentMSecsSinceEpoch());
-
-    QJsonObject payloadObj;
-    payloadObj.insert(QStringLiteral("command"), origCommand);
-    payloadObj.insert(QStringLiteral("status"), status);
-    payloadObj.insert(QStringLiteral("message"), message);
-
-    if (origCommand == QLatin1String("CAPTURE_IMAGE_REQUEST"))
-    {
-        payloadObj.insert(QStringLiteral("file_path"), QStringLiteral("/tmp/mock_capture.jpg"));
-        payloadObj.insert(QStringLiteral("file_size_bytes"), 1048576);
-    }
-    else if (origCommand == QLatin1String("STOP_RECORDING_REQUEST"))
-    {
-        payloadObj.insert(QStringLiteral("file_path"), QStringLiteral("/tmp/mock_video.mp4"));
-        payloadObj.insert(QStringLiteral("file_size_bytes"), 5242880);
-    }
-    
-    responseObj.insert(QStringLiteral("payload"), payloadObj);
-    QJsonDocument doc(responseObj);
-    pClient->sendTextMessage(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
 }
