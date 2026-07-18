@@ -41,6 +41,7 @@ private:
     std::vector<std::unique_ptr<libcamera::Request>> m_requests;
 
     bool m_isStreaming;
+    bool m_capturePending;
     uint32_t m_frameIndex;
     qint64 m_lastFrameTime;
 };

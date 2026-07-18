@@ -8,8 +8,9 @@
 #include <unistd.h>
 #include <QImage>
 #include <QBuffer>
-#include <libcamera/control_ids.h>
+#include <QFile>
 #include <QMetaObject>
+#include <libcamera/control_ids.h>
 
 using namespace libcamera;
 
@@ -17,6 +18,7 @@ MediaController::MediaController(quint16 port, QObject *parent) :
     QObject(parent),
     m_pWebSocketServer(new QWebSocketServer(QStringLiteral("Media Controller"), QWebSocketServer::NonSecureMode, this)),
     m_isStreaming(false),
+    m_capturePending(false),
     m_frameIndex(0),
     m_lastFrameTime(0)
 {
@@ -83,7 +85,6 @@ void MediaController::startPreviewStream(int width, int height, int fps)
     streamConfig.size.width = width;
     streamConfig.size.height = height;
     
-    // Request an uncompressed format natively supported by the Pi 5 PiSP
     streamConfig.pixelFormat = libcamera::formats::RGB888;
     
     if (config->validate() == libcamera::CameraConfiguration::Invalid)
@@ -104,10 +105,8 @@ void MediaController::startPreviewStream(int width, int height, int fps)
     {
         const std::unique_ptr<libcamera::FrameBuffer> &buffer = buffers[i];
         
-        // Execute POSIX mmap to bridge the kernel-space dmabuf file descriptor into user-space memory
         void *memory = mmap(NULL, buffer->planes()[0].length, PROT_READ | PROT_WRITE, MAP_SHARED, buffer->planes()[0].fd.get(), 0);
         
-        // mmap returns MAP_FAILED on failure. Failing to catch this causes a segfault during memory access.
         if (memory == MAP_FAILED)
         {
             qWarning() << "Memory Allocation Error: Failed to memory map DMA buffer index" << i;
@@ -123,7 +122,6 @@ void MediaController::startPreviewStream(int width, int height, int fps)
     
     m_camera->requestCompleted.connect(this, &MediaController::requestComplete);
     
-    // Calculate frame duration bounds in microseconds to enforce the target FPS
     int64_t frameTimeMicroseconds = 1000000 / fps;
     libcamera::ControlList controls;
     controls.set(libcamera::controls::FrameDurationLimits, libcamera::Span<const int64_t, 2>({ frameTimeMicroseconds, frameTimeMicroseconds }));
@@ -149,7 +147,6 @@ void MediaController::stopPreviewStream()
     m_camera->stop();
     m_camera->requestCompleted.disconnect(this, &MediaController::requestComplete);
     
-    // Purge active memory mappings to prevent heap leakage
     for (auto const& [index, mapped] : m_mappedBuffers)
     {
         munmap(mapped.first, mapped.second);
@@ -178,48 +175,91 @@ void MediaController::requestComplete(Request *request)
     
     if (bytesused > 0 && !m_clients.isEmpty())
     {
-        // Explicitly inject the hardware stream stride to prevent byte misalignment and image shearing
         QImage image(static_cast<const uchar*>(memory), 
                      m_stream->configuration().size.width, 
                      m_stream->configuration().size.height, 
                      m_stream->configuration().stride, 
                      QImage::Format_RGB888);
 
-        // Compress the image to JPEG in memory
+        // Intercept the active frame and dump to disk if a capture request is queued
+        if (m_capturePending)
+        {
+            QString filePath = QString("/tmp/capture_%1.jpg").arg(QDateTime::currentMSecsSinceEpoch());
+            
+            if (image.save(filePath, "JPEG", 100))
+            {
+                QFile file(filePath);
+                qint64 fileSizeBytes = file.size();
+                
+                QJsonObject payloadObj;
+                payloadObj["command"] = "CAPTURE_IMAGE_REQUEST";
+                payloadObj["file_path"] = filePath;
+                payloadObj["file_size_bytes"] = fileSizeBytes;
+                
+                QJsonObject responseObj;
+                responseObj["type"] = "COMMAND_RESPONSE";
+                responseObj["payload"] = payloadObj;
+                
+                QJsonDocument doc(responseObj);
+                QString responseStr = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+                
+                QMetaObject::invokeMethod(this, [this, responseStr]()
+                {
+                    for (QWebSocket *client : std::as_const(m_clients))
+                    {
+                        client->sendTextMessage(responseStr);
+                    }
+                }, Qt::QueuedConnection);
+                
+                qDebug() << "Hardware capture complete:" << filePath;
+            }
+            else
+            {
+                qWarning() << "Disk I/O Error: Failed to write JPEG payload to /tmp.";
+            }
+            
+            m_capturePending = false;
+        }
+
         QByteArray jpegData;
         QBuffer imgBuffer(&jpegData);
         imgBuffer.open(QIODevice::WriteOnly);
-        image.save(&imgBuffer, "JPEG", 75);
         
-        QByteArray header;
-        header.resize(8);
-        
-        quint32 currentFrameIndex = m_frameIndex++;
-        qint64 now = QDateTime::currentMSecsSinceEpoch();
-        quint32 timeDelta = m_lastFrameTime > 0 ? (now - m_lastFrameTime) : 0;
-        m_lastFrameTime = now;
-        
-        // Pack the 8-byte metadata header
-        header[0] = (currentFrameIndex >> 24) & 0xFF;
-        header[1] = (currentFrameIndex >> 16) & 0xFF;
-        header[2] = (currentFrameIndex >> 8) & 0xFF;
-        header[3] = currentFrameIndex & 0xFF;
-        
-        header[4] = (timeDelta >> 24) & 0xFF;
-        header[5] = (timeDelta >> 16) & 0xFF;
-        header[6] = (timeDelta >> 8) & 0xFF;
-        header[7] = timeDelta & 0xFF;
-        
-        QByteArray frameData = header;
-        frameData.append(jpegData);
-        
-        // Safely dispatch the WebSocket transmission back to the main Qt thread
-        QMetaObject::invokeMethod(this, [this, frameData]() {
-            for (QWebSocket *client : std::as_const(m_clients))
+        if (!image.save(&imgBuffer, "JPEG", 75))
+        {
+            qWarning() << "Backend Fault: QImage failed to encode raw RGB888 buffer to JPEG. Frame dropped.";
+        }
+        else
+        {
+            QByteArray header;
+            header.resize(8);
+            
+            quint32 currentFrameIndex = m_frameIndex++;
+            qint64 now = QDateTime::currentMSecsSinceEpoch();
+            quint32 timeDelta = m_lastFrameTime > 0 ? (now - m_lastFrameTime) : 0;
+            m_lastFrameTime = now;
+            
+            header[0] = (currentFrameIndex >> 24) & 0xFF;
+            header[1] = (currentFrameIndex >> 16) & 0xFF;
+            header[2] = (currentFrameIndex >> 8) & 0xFF;
+            header[3] = currentFrameIndex & 0xFF;
+            
+            header[4] = (timeDelta >> 24) & 0xFF;
+            header[5] = (timeDelta >> 16) & 0xFF;
+            header[6] = (timeDelta >> 8) & 0xFF;
+            header[7] = timeDelta & 0xFF;
+            
+            QByteArray frameData = header;
+            frameData.append(jpegData);
+            
+            QMetaObject::invokeMethod(this, [this, frameData]()
             {
-                client->sendBinaryMessage(frameData);
-            }
-        }, Qt::QueuedConnection);
+                for (QWebSocket *client : std::as_const(m_clients))
+                {
+                    client->sendBinaryMessage(frameData);
+                }
+            }, Qt::QueuedConnection);
+        }
     }
     
     request->reuse(Request::ReuseBuffers);
@@ -259,6 +299,10 @@ void MediaController::processTextMessage(const QString &message)
     else if (type == "STOP_PREVIEW_STREAM")
     {
         stopPreviewStream();
+    }
+    else if (type == "CAPTURE_IMAGE_REQUEST")
+    {
+        m_capturePending = true;
     }
 }
 
