@@ -346,7 +346,10 @@ window.handleCommandResponse = function(payload)
     if (payload.command === "CAPTURE_IMAGE_REQUEST")
     {
         console.log(`[SUCCESS] Image captured and saved to: ${payload.file_path} (${payload.file_size_bytes} bytes)`);
-        // Optional: Trigger a UI toast notification here in the future
+        
+        // Extract filename from full system path for clean UX presentation
+        const fileName = payload.file_path.split('/').pop();
+        showNotification(`Saved: ${fileName} (${(payload.file_size_bytes / 1024).toFixed(1)} KB)`);
     }
     else if (payload.command === "STOP_RECORDING_REQUEST")
     {
@@ -561,4 +564,34 @@ function toggleRecord()
     }
     
     console.log("Recording state:", cameraState.isRecording);
+}
+
+function showNotification(message)
+{
+    const container = document.getElementById('toast-container');
+    if (!container)
+    {
+        return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.innerHTML = `<span style="color: var(--success);">✔</span> ${message}`;
+    
+    container.appendChild(toast);
+
+    // Force reflow to guarantee CSS transition initialization
+    toast.offsetHeight;
+
+    toast.classList.add('visible');
+
+    // Smooth teardown sequence
+    setTimeout(() =>
+    {
+        toast.classList.remove('visible');
+        toast.addEventListener('transitionend', () =>
+        {
+            toast.remove();
+        });
+    }, 4000);
 }
